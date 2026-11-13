@@ -152,6 +152,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
           <label class="f">壁內水位自動取開挖面下 (m)<input type="number" id="dewater" step="0.5"></label>
           <label class="f">開挖寬度 B (m)<input type="number" id="width" step="1"></label>
           <label class="f">壁面附著力比 cw/c<input type="number" id="adh" step="0.1" min="0"></label>
+          <label class="f">水壓計算<select id="seep"><option value="1">滲流（與 TORSA 相同）</option><option value="0">靜水壓</option></select></label>
         </div>
       </section>
       <section class="card">
@@ -169,7 +170,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
         <h2>土層 <small>砂性＝排水有效應力，黏性＝不排水總應力</small></h2>
         <div class="scroll"><table class="in" id="tLayers"></table></div>
         <button class="add" id="addLayer" type="button">＋ 新增土層</button>
-        <p class="hint">砂性土填 φ、c 與壁面摩擦角 δ（留空取 φ/2）；黏性土填層頂 su 與每公尺增量 Δsu。kh 為水平地盤反力係數。<br>按「估算」會用該層 SPT-N 值覆寫參數：kh = 691·N<sup>0.406</sup> t/m³（即 6779·N<sup>0.406</sup> kN/m³）；砂性土 φ = √(15N) + 15（上限 45°）、δ = φ/2；黏性土 su = 6.25N。φ 與 su 是經驗式，有試驗值時請直接填試驗值。</p><p class="hint err" id="estMsg" hidden style="padding:4px 8px;border:1px solid;border-radius:4px"></p>
+        <p class="hint">砂性土填 φ、c 與壁面摩擦角 δ（留空取 φ/2）；黏性土填層頂 su 與每公尺增量 Δsu。kh 為水平地盤反力係數。<br>按「估算」會用該層 SPT-N 值覆寫參數：kh = 691·N<sup>0.406</sup> t/m³（即 6779·N<sup>0.406</sup> kN/m³）；砂性土 φ = 0.3N + 27（N &lt; 20）或 1.3√N + 28（N ≥ 20）、δ = φ/2；黏性土 su = N/1.6 t/m²（6.13N kPa）。φ 與 su 是經驗式，有試驗值時請直接填試驗值。</p><p class="hint err" id="estMsg" hidden style="padding:4px 8px;border:1px solid;border-radius:4px"></p>
       </section>
       <section class="card">
         <h2>支撐</h2>
@@ -187,7 +188,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
         <div class="scroll"><table class="in" id="tStages"></table></div>
         <button class="add" id="addStage" type="button">＋ 新增階段</button>
         <div class="fields" style="margin-top:12px;grid-template-columns:1fr"><label class="f">各階段結果取用的時點<select id="mode"><option value="post">架設支撐並預壓後（與 TORSA 相同）</option><option value="pre">開挖完成、尚未架撐時（較保守）</option></select></label></div>
-        <p class="hint">水位留空為自動：壁外維持初始地下水位，壁內降到開挖面下指定深度。擋土壁不具水密性（如鋼軌樁、鋼板樁未止水）時，壁內外可填相同水位，表示內外同時下降。水壓採靜水壓，不計滲流。</p>
+        <p class="hint">水位留空為自動：壁外維持初始地下水位，壁內降到開挖面下指定深度。擋土壁不具水密性（如鋼軌樁、鋼板樁未止水）時，壁內外可填相同水位，表示內外同時下降。內外有水位差時，水壓依「基本條件」選的算法計算。</p>
       </section>
     </div>
     <div class="col" id="results">
@@ -211,7 +212,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
         <h2>支撐檢核 <small>簡化容許應力法，僅計軸壓</small></h2>
         <div class="scroll"><table class="out" id="tStrutChk"></table></div>
       </section>
-      <p class="foot">模型簡化：壁兩側土壤以彈簧模擬，上下限為主動與被動土壓（Coulomb 水平分量，含壁面摩擦）；不考慮滲流、土壤塑性遲滯、支撐溫度效應與鄰房超載分布。安全係數需求值為常用值，請自行對照現行規範。本工具供學習與初步評估，正式設計須由專業技師依實際鑽探資料辦理。</p>
+      <p class="foot">模型簡化：壁兩側土壤以彈簧模擬，上下限為主動與被動土壓（Coulomb 水平分量，含壁面摩擦）；不考慮支撐溫度效應與鄰房超載分布。安全係數需求值為常用值，請自行對照現行規範。本工具供學習與初步評估，正式設計須由專業技師依實際鑽探資料辦理。</p>
     </div>
   </div>
   <div id="reportView" hidden>
@@ -235,7 +236,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
 <script>
 "use strict";
 /* ============================ 計算核心（不碰 DOM） ============================ */
-const GW = 9.81, DZ = 0.25;
+const GW = 9.81, DZ = 0.25, EPS = 1e-7;
 
 function defaultCase() {
   return {
@@ -296,7 +297,7 @@ function totalStress(c, z0, z) {
 const suAt = (L, z) => L.a + L.b * (z - L.top);
 /* 砂性土側壓係數：Coulomb 理論之水平分量（δ = 0 時即 Rankine）；K0 = 1 − sinφ */
 function kCoef(L) {
-  if (L.type !== "S") return { ka: 1, kp: 1, k0: 0.5, d: 0 };
+  if (L.type !== "S") return { ka: 1, kp: 1, k0: 1, d: 0 };
   const ph = L.a * Math.PI / 180;
   let dd = (typeof L.d === "number" && isFinite(L.d)) ? L.d : L.a / 2;
   dd = Math.max(0, Math.min(dd, L.a));
@@ -304,17 +305,15 @@ function kCoef(L) {
   return { ka: c2 / (1 + r) ** 2, kp: c2 / (1 - r) ** 2, k0: 1 - Math.sin(ph), d: dd };
 }
 /* 某一側在深度 z 的 [靜止 p0, 主動 pa, 被動 pp, 水壓 u]；黏土為總應力，u=0 */
-function sideP(c, z, surface, wl, q) {
+function sideP(c, z, surface, wl, q, wf) {
   if (z < surface) return [0, 0, 0, 0];
-  const L = layerAt(c, z), sv = q + totalStress(c, surface, z), uh = GW * Math.max(0, z - wl);
+  const L = layerAt(c, z), sv = q + totalStress(c, surface, z), uh = GW * Math.max(0, z - wl) * (wf === undefined ? 1 : wf);
   if (L.type === "S") {
     const sve = Math.max(sv - uh, 0), { ka, kp, k0 } = kCoef(L), aw = 1 + c.adh;
     return [k0 * sve, Math.max(ka * sve - 2 * L.b * Math.sqrt(ka * aw), 0), kp * sve + 2 * L.b * Math.sqrt(kp * aw), uh];
   }
   const su = suAt(L, z), cf = 2 * su * Math.sqrt(1 + c.adh), pa = Math.max(sv - cf, 0), pp = sv + cf;
-  let p0 = 0.5 * Math.max(sv - uh, 0) + Math.min(uh, sv);
-  p0 = Math.min(Math.max(p0, pa), pp);
-  return [p0, pa, pp, 0];
+  return [Math.min(Math.max(sv, pa), pp), pa, pp, 0];   // 黏性土總應力，K0 = 1
 }
 /* 對稱帶狀矩陣求解（半帶寬 3），K 為 N×N 一維陣列，會被改寫 */
 function solveBand(K, F, N) {
@@ -359,28 +358,43 @@ function analyze(c0) {
     k: Es * (s.area / 1e4) * c.seff / ((c.width / 2) * s.spacing), P: s.preload / s.spacing, d0: null
   }));
 
-  function solve(exc, preK, wlIn, wlOut) {
-    const ins = zs.map(v => sideP(c, v, exc, wlIn, 0));
-    const out = zs.map(v => sideP(c, v, 0, wlOut, c.surcharge));
+  const dpo = new Float64Array(n), dpi = new Float64Array(n);   // 兩側土壤彈簧的塑性位移（遲滯）
+  function solve(exc, preK, wlIn, wlOut, commit) {
+    const slack = new Set();                     // 支撐不承受拉力：出現拉力者視為鬆脫後重算
+    for (let guard = 0; guard <= struts.length; guard++) {
+      const r = solveOnce(exc, preK, wlIn, wlOut, false, slack);
+      const bad = r.forces.findIndex((f, k) => f !== null && f < -1e-6 && !slack.has(k));
+      if (bad < 0) return commit ? solveOnce(exc, preK, wlIn, wlOut, true, slack) : r;
+      slack.add(bad);
+    }
+    return solveOnce(exc, preK, wlIn, wlOut, commit, slack);
+  }
+  function solveOnce(exc, preK, wlIn, wlOut, commit, slack) {
+    let si = 0;                                  // 沿壁體一維滲流之水力坡降
+    if (c.seep !== false && wlIn > wlOut) { const Lp = Math.max(D - wlOut, 0) + Math.max(D - wlIn, 0); if (Lp > 0) si = Math.min((wlIn - wlOut) / Lp, 1); }
+    const ins = zs.map(v => sideP(c, v, exc, wlIn, 0, 1 + si));
+    const out = zs.map(v => sideP(c, v, 0, wlOut, c.surcharge, 1 - si));
     const hasIn = zs.map(v => v >= exc);
     let d = new Float64Array(n), u = null, done = false;
     for (let it = 0; it < 500 && !done; it++) {
       const K = Kb.slice(), F = new Float64Array(N);
       for (let j = 0; j < n; j++) {
         const t = trib[j], [p0o, pao, ppo, uo] = out[j], [p0i, pai, ppi, ui] = ins[j];
-        const po = p0o - kh[j] * d[j];
+        const po = p0o - kh[j] * (d[j] - dpo[j]);
         if (po < pao) F[2 * j] += pao * t; else if (po > ppo) F[2 * j] += ppo * t;
-        else { K[2 * j * N + 2 * j] += kh[j] * t; F[2 * j] += p0o * t; }
+        else { K[2 * j * N + 2 * j] += kh[j] * t; F[2 * j] += (p0o + kh[j] * dpo[j]) * t; }
+        K[2 * j * N + 2 * j] += EPS * kh[j] * t; F[2 * j] += EPS * kh[j] * t * d[j];   // 數值穩定用，收斂時淨力為零
         F[2 * j] += uo * t;
         if (hasIn[j]) {
-          const pi = p0i + kh[j] * d[j];
+          const pi = p0i + kh[j] * (d[j] - dpi[j]);
           if (pi < pai) F[2 * j] -= pai * t; else if (pi > ppi) F[2 * j] -= ppi * t;
-          else { K[2 * j * N + 2 * j] += kh[j] * t; F[2 * j] -= p0i * t; }
+          else { K[2 * j * N + 2 * j] += kh[j] * t; F[2 * j] -= (p0i - kh[j] * dpi[j]) * t; }
           F[2 * j] -= ui * t;
         }
       }
       struts.forEach((s, k) => {
         const j = 2 * s.node;
+        if (slack.has(k)) return;
         if (s.d0 !== null) { K[j * N + j] += s.k; F[j] += s.k * s.d0 - s.P; }
         else if (preK === k) F[j] -= s.P;
       });
@@ -394,16 +408,22 @@ function analyze(c0) {
     }
     if (!done) throw new Error("迭代未收斂，請檢查輸入參數是否合理。");
     const clip = (v, a, b) => Math.min(Math.max(v, a), b);
-    const po = out.map((o, j) => clip(o[0] - kh[j] * d[j], o[1], o[2]) + o[3]);
-    const pi = ins.map((o, j) => hasIn[j] ? clip(o[0] + kh[j] * d[j], o[1], o[2]) + o[3] : 0);
+    const po = out.map((o, j) => clip(o[0] - kh[j] * (d[j] - dpo[j]), o[1], o[2]) + o[3]);
+    const pi = ins.map((o, j) => hasIn[j] ? clip(o[0] + kh[j] * (d[j] - dpi[j]), o[1], o[2]) + o[3] : 0);
+    if (commit) for (let j = 0; j < n; j++) {     // 達主動或被動極限的彈簧，更新塑性位移
+      const o = out[j], eo = o[0] - kh[j] * (d[j] - dpo[j]);
+      if (eo < o[1]) dpo[j] = d[j] - (o[0] - o[1]) / kh[j]; else if (eo > o[2]) dpo[j] = d[j] - (o[0] - o[2]) / kh[j];
+      if (hasIn[j]) { const q = ins[j], ei = q[0] + kh[j] * (d[j] - dpi[j]);
+        if (ei < q[1]) dpi[j] = d[j] + (q[0] - q[1]) / kh[j]; else if (ei > q[2]) dpi[j] = d[j] + (q[0] - q[2]) / kh[j]; }
+    }
     const M = new Array(n).fill(0), V = new Array(n).fill(0);
     for (let e = 0; e < n - 1; e++) {
       const fe = ke.map(r => r[0] * u[2 * e] + r[1] * u[2 * e + 1] + r[2] * u[2 * e + 2] + r[3] * u[2 * e + 3]);
       V[e] = fe[0]; M[e] = -fe[1];
       if (e === n - 2) { V[e + 1] = -fe[2]; M[e + 1] = fe[3]; }
     }
-    const forces = struts.map((s, k) => s.d0 !== null ? s.P + s.k * (d[s.node] - s.d0) : (preK === k ? s.P : null));
-    return { exc, d: Array.from(d), M, V, po, pi, forces, ins, out, wlIn, wlOut };
+    const forces = struts.map((s, k) => slack.has(k) ? 0 : s.d0 !== null ? s.P + s.k * (d[s.node] - s.d0) : (preK === k ? s.P : null));
+    return { exc, d: Array.from(d), M, V, po, pi, forces, ins, out, wlIn, wlOut, si };
   }
 
   const results = [];
@@ -413,11 +433,12 @@ function analyze(c0) {
     const wlIn = isNum(st.wlin) ? st.wlin : Math.max(wlOut, st.exc + c.dewater);
     if (wlIn < st.exc) throw new Error("第 " + (i + 1) + " 階的壁內水位（GL-" + wlIn + " m）高於開挖面，請降到開挖面以下。");
     if (wlIn < wlOut) throw new Error("第 " + (i + 1) + " 階的壁內水位高於壁外水位，請檢查輸入。");
-    const r = solve(st.exc, -1, wlIn, wlOut);
+    const sNew = struts[st.install], willInstall = !!(sNew && sNew.d0 === null);
+    const r = solve(st.exc, -1, wlIn, wlOut, !(willInstall && c.mode !== "pre"));
     r.label = "第" + (i + 1) + "階 GL-" + st.exc.toFixed(1) + " m";
     const s = struts[st.install];
     if (s && s.d0 === null) {
-      const rp = solve(st.exc, st.install, wlIn, wlOut); s.d0 = rp.d[s.node];
+      const rp = solve(st.exc, st.install, wlIn, wlOut, true); s.d0 = rp.d[s.node];
       if (c.mode !== "pre") { rp.label = r.label; rp.pre = r; results.push(rp); return; }
     }
     results.push(r);
@@ -496,6 +517,7 @@ if (typeof document !== "undefined") (function () {
 
   function buildInputs() {
     $("mode").value = C.mode === "pre" ? "pre" : "post";
+    $("seep").value = C.seep === false ? "0" : "1";
     scalars.forEach(k => { $(k).value = (typeof C[k] === "number" && isFinite(C[k])) ? C[k] : ""; });
     $("tLayers").innerHTML = "<tr><th>名稱</th><th>層底 (m)</th><th>SPT-N</th><th>γ (kN/m³)</th><th>類型</th><th>φ° ／ su</th><th>c ／ Δsu</th><th>δ°</th><th>kh (kN/m³)</th><th>由 N</th><th></th></tr>" +
       C.layers.map((L, i) => `<tr><td class="nm"><input id="L${i}name" data-t="layers" data-i="${i}" data-k="name" value="${esc(L.name)}" aria-label="土層名稱"></td>` +
@@ -524,6 +546,7 @@ if (typeof document !== "undefined") (function () {
       if (t.dataset.t === "layers" && k === "type") buildInputs();
     } else if (scalars.includes(t.id)) C[t.id] = num(t.value);
     else if (t.id === "mode") C.mode = t.value;
+    else if (t.id === "seep") C.seep = t.value === "1";
     schedule();
   });
   $("inputs").addEventListener("click", e => {
@@ -532,8 +555,8 @@ if (typeof document !== "undefined") (function () {
     if (b.dataset.est) {
       const L = C.layers[+b.dataset.est], N = L.n;
       if (!(N > 0)) { $("estMsg").hidden = false; $("estMsg").textContent = "請先在「" + L.name + "」填入大於 0 的 SPT-N 值。"; return; }
-      if (L.type === "S") { L.a = +Math.min(45, Math.sqrt(15 * N) + 15).toFixed(1); L.b = 0; L.d = +(L.a / 2).toFixed(1); }
-      else { L.a = +(6.25 * N).toFixed(1); L.b = 0; }
+      if (L.type === "S") { L.a = +(N < 20 ? 0.3 * N + 27 : 1.3 * Math.sqrt(N) + 28).toFixed(1); L.b = 0; L.d = +(L.a / 2).toFixed(2); }
+      else { L.a = +(N / 1.6 * 9.81).toFixed(1); L.b = 0; }
       L.kh = Math.round(6779 * Math.pow(N, 0.406));
       L.est = true;
     } else if (b.dataset.del) {
@@ -721,15 +744,15 @@ if (typeof document !== "undefined") (function () {
         return [td(esc(L.name), "l"), td(f(L.top, 1) + " ～ " + f(L.bot, 1), "c"), td(L.n > 0 ? String(+f(L.n, 1)) : "–"), td(f(L.gamma, 1)), td(S ? "砂性" : "黏性", "c"),
           td(S ? String(+f(L.a, 1)) : "0"), td(S ? String(+f(kc.d, 1)) : "–"), td(S ? String(+f(L.b, 1)) : "–"), td(S ? "–" : f(L.a, 0) + (L.b ? " + " + f(L.b, 1) + "·Δz" : "")),
           td(f(kc.ka, 3)), td(f(kc.kp, 3)), td(f(kc.k0, 3)), td(f(L.kh, 0))];
-      })) + `<p class="note">砂性土採排水有效應力分析並另計靜水壓；黏性土採不排水總應力分析（φ = 0），su 隨層內深度 Δz 線性增加，K₀ 為有效應力之靜止土壓係數。${c.layers.some(L => L.est) ? "<br>下列土層之強度與 kh 由 SPT-N 值以經驗式推估：" + c.layers.filter(L => L.est).map(L => esc(L.name)).join("、") + "。kh = 691·N^0.406 (t/m³)；砂性土 φ = √(15N) + 15（≤ 45°）、δ = φ/2；黏性土 su = 6.25N (kPa)。" : ""}</p>`;
+      })) + `<p class="note">砂性土採排水有效應力分析並另計水壓；黏性土採不排水總應力分析（φ = 0），su 隨層內深度 Δz 線性增加，K₀ 取 1.0。${c.layers.some(L => L.est) ? "<br>下列土層之強度與 kh 由 SPT-N 值以經驗式推估：" + c.layers.filter(L => L.est).map(L => esc(L.name)).join("、") + "。kh = 691·N^0.406 (t/m³)；砂性土 φ = 0.3N + 27°（N < 20）或 1.3√N + 28°（N ≥ 20）、δ = φ/2；黏性土 su = N/1.6 (t/m²)。" : ""}</p>`;
 
     h += `<h2>三、分析方法</h2>
-      <p>採彈塑性基礎梁法。擋土壁以梁元素模擬（節點間距 ${DZ} m），壁體兩側土壤以彈塑性彈簧模擬，依施工順序逐階分析開挖、架設支撐與預壓。位移 δ 以朝開挖側為正。</p>
+      <p>採彈塑性基礎梁法。擋土壁以梁元素模擬（節點間距 ${DZ} m），壁體兩側土壤以彈塑性彈簧模擬，依施工順序逐階分析開挖、架設支撐與預壓；土壤彈簧達主動或被動極限後產生塑性位移，卸載時依彈性勁度回復（考慮遲滯），支撐不承受拉力。位移 δ 以朝開挖側為正。</p>
       <p class="eq">壁外側壓：p = p₀ − kh·δ　　壁內側壓：p = p₀ + kh·δ　　且 pa ≤ p ≤ pp</p>
       <p class="eq">砂性土（Coulomb 土壓之水平分量，δ 為壁面摩擦角）：</p>
       <p class="eq">　　　　Ka = cos²φ / [1 + √(sin(φ+δ)·sin φ / cos δ)]²，Kp = cos²φ / [1 − √(sin(φ+δ)·sin φ / cos δ)]²，K₀ = 1 − sin φ</p>
-      <p class="eq">　　　　pa = Ka·σv′ − 2c√[Ka(1 + cw/c)] ≥ 0，pp = Kp·σv′ + 2c√[Kp(1 + cw/c)]，另加靜水壓 u = γw·hw</p>
-      <p class="eq">黏性土：pa = σv − 2su√(1 + cw/su) ≥ 0，pp = σv + 2su√(1 + cw/su)（總應力）</p>
+      <p class="eq">　　　　pa = Ka·σv′ − 2c√[Ka(1 + cw/c)] ≥ 0，pp = Kp·σv′ + 2c√[Kp(1 + cw/c)]，另加水壓 u</p>
+      <p class="eq">黏性土：pa = σv − 2su√(1 + cw/su) ≥ 0，pp = σv + 2su√(1 + cw/su)，p₀ = σv（總應力，K₀ = 1）</p>
       <p class="eq">壁面附著力比 cw/c = ${f(c.adh, 2)}</p>
       <p class="eq">支撐軸力：N = P + k·(δ − δ₀)，δ₀ 為預壓完成時支撐位置之壁體變位</p>`;
 
@@ -744,7 +767,7 @@ if (typeof document !== "undefined") (function () {
 
     h += `<h2>五、施工階段</h2>` + tbl(["階段", "開挖至 GL- (m)", "壁內水位 GL- (m)", "壁外水位 GL- (m)", "開挖後施作"],
       c.stages.map((st, i) => [td("第 " + (i + 1) + " 階", "c"), td(f(st.exc, 2)), td(f(rs[i].wlIn, 2)), td(f(rs[i].wlOut, 2)), td(R.struts[st.install] ? "架設第 " + (st.install + 1) + " 層支撐（GL-" + f(R.struts[st.install].z, 2) + " m）並預壓" : "—", "l")])) +
-      `<p class="note">各階段水位隨開挖降水調整，壁內、壁外水壓均以該階段水位之靜水壓計算，不計滲流。</p>`;
+      `<p class="note">各階段水位隨開挖降水調整，壁內、壁外水壓均依該階段水位計算。${c.seep === false ? "水壓採靜水壓，不計滲流。" : "內外有水位差時考慮沿壁體之一維滲流：水力坡降 i = Δh / (L外 + L內)，L 為各側水位至壁底之距離；壁外水壓 u = γw·hw·(1 − i)，壁內水壓 u = γw·hw·(1 + i)。最終階段 i = " + f(fin.si, 3) + "。"}</p>`;
 
     const rows6 = [];
     for (let zz = 0; zz <= D + 1e-9; zz += 1) {
@@ -782,7 +805,7 @@ if (typeof document !== "undefined") (function () {
       ${sr.length ? `<li>支撐最大軸力 ${f(Math.max(...sr.map(s => s.N)), 0)} kN/支，應力比最大 ${f(Math.max(...sr.map(s => s.sig / s.Fa)), 2)}，${sr.every(s => s.sig <= s.Fa) ? "符合" : "不符合"}容許應力。</li>` : ""}
       <li>穩定性：${R.stab.map(s => esc(s.name) + " FS = " + f(s.fs, 2) + "（" + (s.fs >= s.req ? "OK" : "NG") + "）").join("；")}。</li>
       <li>綜合判定：${allOk ? '<span class="ok">各項檢核均符合需求</span>' : '<span class="ng">有檢核項目不符需求，應調整設計</span>'}。</li></ul>
-      <p class="note">附註：本計算以 Coulomb 土壓理論及彈塑性彈簧模型進行，未考慮滲流、土壤塑性遲滯、支撐溫度效應及鄰近結構物超載分布；安全係數需求值應依現行規範與主管機關規定核對。本計算書供初步評估參考，正式設計應由專業技師依實際地質調查資料辦理並簽證。</p>
+      <p class="note">附註：本計算以 Coulomb 土壓理論及彈塑性彈簧模型進行，未考慮支撐溫度效應及鄰近結構物超載分布；安全係數需求值應依現行規範與主管機關規定核對。本計算書供初步評估參考，正式設計應由專業技師依實際地質調查資料辦理並簽證。</p>
       <div class="sign"><div>計算者</div><div>覆核者</div><div>日期</div></div>`;
     return h;
   }
