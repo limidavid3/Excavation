@@ -39,7 +39,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14p
 header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
 h1{font-size:22px;margin:0;font-weight:700;letter-spacing:.02em}
 header p{margin:0;color:var(--muted);font-size:13px}
-.grid{display:grid;grid-template-columns:minmax(0,540px) minmax(0,1fr);gap:16px;align-items:start}
+.grid{display:grid;grid-template-columns:minmax(0,640px) minmax(0,1fr);gap:16px;align-items:start}
 @media (max-width:1100px){.grid{grid-template-columns:minmax(0,1fr)}}
 .col{display:flex;flex-direction:column;gap:16px;min-width:0}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
@@ -55,9 +55,10 @@ th{font-size:11.5px;font-weight:500;color:var(--muted);text-align:left;padding:3
 td{padding:3px 4px;vertical-align:middle}
 table.in td input,table.in td select{padding:4px 5px}
 table.in td.nm input{font-family:var(--font);min-width:92px}
-table.in td input[type=number]{min-width:54px}
-table.in td select{min-width:72px}
-table.in td input[data-k=kh]{min-width:78px}
+table.in td input[type=number]{min-width:44px}
+table.in td select{min-width:66px}
+table.in td input[data-k=kh]{min-width:68px}
+#tLayers td{padding:3px 2px}#tLayers td input,#tLayers td select{padding:4px 4px}#tLayers td.nm input{min-width:88px}
 table.out th,table.out td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
 table.out th:first-child,table.out td:first-child{text-align:left}
 table.out td{font-family:var(--num);font-size:14.5px}
@@ -147,9 +148,10 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
         <h2>基本條件</h2>
         <div class="fields">
           <label class="f">地表超載 q (kPa)<input type="number" id="surcharge" step="1"></label>
-          <label class="f">壁外地下水位 GL- (m)<input type="number" id="gwl" step="0.5"></label>
-          <label class="f">壁內降水至開挖面下 (m)<input type="number" id="dewater" step="0.5"></label>
+          <label class="f">初始地下水位 GL- (m)<input type="number" id="gwl" step="0.5"></label>
+          <label class="f">壁內水位自動取開挖面下 (m)<input type="number" id="dewater" step="0.5"></label>
           <label class="f">開挖寬度 B (m)<input type="number" id="width" step="1"></label>
+          <label class="f">壁面附著力比 cw/c<input type="number" id="adh" step="0.1" min="0"></label>
         </div>
       </section>
       <section class="card">
@@ -159,13 +161,15 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
           <label class="f">壁厚 (m)<input type="number" id="wthick" step="0.1"></label>
           <label class="f">混凝土 f′c (MPa)<input type="number" id="wfc" step="1"></label>
           <label class="f">EI 折減係數<input type="number" id="wred" step="0.05"></label>
+          <label class="f">直接輸入 EI (kN·m²/m)<input type="number" id="wei" step="any" placeholder="留空＝依壁厚計算"></label>
         </div>
+        <p class="hint">鋼軌樁、鋼板樁等非混凝土壁體請直接輸入每公尺壁寬的 EI（已含折減），壁厚與 f′c 即不採用。1 t-m²/m = 9.81 kN·m²/m。</p>
       </section>
       <section class="card">
         <h2>土層 <small>砂性＝排水有效應力，黏性＝不排水總應力</small></h2>
         <div class="scroll"><table class="in" id="tLayers"></table></div>
         <button class="add" id="addLayer" type="button">＋ 新增土層</button>
-        <p class="hint">砂性土填 φ 與 c；黏性土填層頂 su 與每公尺增量 Δsu。kh 為水平地盤反力係數。</p>
+        <p class="hint">砂性土填 φ、c 與壁面摩擦角 δ（留空取 φ/2）；黏性土填層頂 su 與每公尺增量 Δsu。kh 為水平地盤反力係數。<br>按「估算」會用該層 SPT-N 值覆寫參數：kh = 691·N<sup>0.406</sup> t/m³（即 6779·N<sup>0.406</sup> kN/m³）；砂性土 φ = √(15N) + 15（上限 45°）、δ = φ/2；黏性土 su = 6.25N。φ 與 su 是經驗式，有試驗值時請直接填試驗值。</p><p class="hint err" id="estMsg" hidden style="padding:4px 8px;border:1px solid;border-radius:4px"></p>
       </section>
       <section class="card">
         <h2>支撐</h2>
@@ -182,6 +186,8 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
         <h2>施工階段 <small>每階段先開挖，再架設指定支撐並預壓</small></h2>
         <div class="scroll"><table class="in" id="tStages"></table></div>
         <button class="add" id="addStage" type="button">＋ 新增階段</button>
+        <div class="fields" style="margin-top:12px;grid-template-columns:1fr"><label class="f">各階段結果取用的時點<select id="mode"><option value="post">架設支撐並預壓後（與 TORSA 相同）</option><option value="pre">開挖完成、尚未架撐時（較保守）</option></select></label></div>
+        <p class="hint">水位留空為自動：壁外維持初始地下水位，壁內降到開挖面下指定深度。擋土壁不具水密性（如鋼軌樁、鋼板樁未止水）時，壁內外可填相同水位，表示內外同時下降。水壓採靜水壓，不計滲流。</p>
       </section>
     </div>
     <div class="col" id="results">
@@ -191,7 +197,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
         <h2>各階段壁體反應 <small>點選階段可切換圖上的強調與側壓分布</small></h2>
         <div class="chips" id="chips"></div>
         <div class="readout" id="readout"></div>
-        <div class="scroll"><div id="chart" style="min-width:860px"></div></div>
+        <div class="scroll"><div id="chart" style="min-width:720px"></div></div>
       </section>
       <section class="card">
         <h2>穩定性檢核 <small>最終開挖階段</small></h2>
@@ -205,7 +211,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--s
         <h2>支撐檢核 <small>簡化容許應力法，僅計軸壓</small></h2>
         <div class="scroll"><table class="out" id="tStrutChk"></table></div>
       </section>
-      <p class="foot">模型簡化：壁兩側土壤以彈簧模擬，上下限為 Rankine 主動與被動土壓；不考慮滲流、壁面摩擦、土壤塑性遲滯、支撐溫度效應與鄰房超載分布。安全係數需求值為常用值，請自行對照現行規範。本工具供學習與初步評估，正式設計須由專業技師依實際鑽探資料辦理。</p>
+      <p class="foot">模型簡化：壁兩側土壤以彈簧模擬，上下限為主動與被動土壓（Coulomb 水平分量，含壁面摩擦）；不考慮滲流、土壤塑性遲滯、支撐溫度效應與鄰房超載分布。安全係數需求值為常用值，請自行對照現行規範。本工具供學習與初步評估，正式設計須由專業技師依實際鑽探資料辦理。</p>
     </div>
   </div>
   <div id="reportView" hidden>
@@ -233,13 +239,13 @@ const GW = 9.81, DZ = 0.25;
 
 function defaultCase() {
   return {
-    surcharge: 10, gwl: 2, dewater: 0.5, width: 20,
+    surcharge: 10, gwl: 2, dewater: 0.5, width: 20, adh: 0.5, wei: null,
     wdepth: 20, wthick: 0.6, wfc: 28, wred: 0.7,
     layers: [
-      { name: "SF 回填層",   bot: 2,  gamma: 18,   type: "S", a: 28, b: 0, kh: 8000 },
-      { name: "SM 粉土質砂", bot: 8,  gamma: 19,   type: "S", a: 30, b: 0, kh: 15000 },
-      { name: "CL 粉質黏土", bot: 25, gamma: 18.5, type: "C", a: 60, b: 4, kh: 15000 },
-      { name: "SM 緊密砂層", bot: 40, gamma: 20,   type: "S", a: 34, b: 0, kh: 40000 }
+      { name: "SF 回填層", n: 5,   bot: 2,  gamma: 18,   type: "S", a: 28, b: 0, d: 14, kh: 8000 },
+      { name: "SM 粉土質砂", n: 12, bot: 8,  gamma: 19,   type: "S", a: 30, b: 0, d: 15, kh: 15000 },
+      { name: "CL 粉質黏土", n: 10, bot: 25, gamma: 18.5, type: "C", a: 60, b: 4, kh: 15000 },
+      { name: "SM 緊密砂層", n: 35, bot: 40, gamma: 20,   type: "S", a: 34, b: 0, d: 17, kh: 40000 }
     ],
     struts: [
       { z: 1, area: 173.9, spacing: 5, preload: 300 },
@@ -252,6 +258,7 @@ function defaultCase() {
 }
 
 function prep(c) {
+  if (!(c.adh >= 0)) c.adh = 0.5;
   let top = 0;
   for (const L of c.layers) {
     if (!(L.bot > top)) throw new Error("土層「" + L.name + "」的層底深度必須大於上一層的層底。");
@@ -287,16 +294,24 @@ function totalStress(c, z0, z) {
   return s;
 }
 const suAt = (L, z) => L.a + L.b * (z - L.top);
+/* 砂性土側壓係數：Coulomb 理論之水平分量（δ = 0 時即 Rankine）；K0 = 1 − sinφ */
+function kCoef(L) {
+  if (L.type !== "S") return { ka: 1, kp: 1, k0: 0.5, d: 0 };
+  const ph = L.a * Math.PI / 180;
+  let dd = (typeof L.d === "number" && isFinite(L.d)) ? L.d : L.a / 2;
+  dd = Math.max(0, Math.min(dd, L.a));
+  const de = dd * Math.PI / 180, r = Math.sqrt(Math.sin(ph + de) * Math.sin(ph) / Math.cos(de)), c2 = Math.cos(ph) ** 2;
+  return { ka: c2 / (1 + r) ** 2, kp: c2 / (1 - r) ** 2, k0: 1 - Math.sin(ph), d: dd };
+}
 /* 某一側在深度 z 的 [靜止 p0, 主動 pa, 被動 pp, 水壓 u]；黏土為總應力，u=0 */
 function sideP(c, z, surface, wl, q) {
   if (z < surface) return [0, 0, 0, 0];
   const L = layerAt(c, z), sv = q + totalStress(c, surface, z), uh = GW * Math.max(0, z - wl);
   if (L.type === "S") {
-    const sve = Math.max(sv - uh, 0), ph = L.a * Math.PI / 180;
-    const ka = Math.tan(Math.PI / 4 - ph / 2) ** 2, kp = 1 / ka, k0 = 1 - Math.sin(ph);
-    return [k0 * sve, Math.max(ka * sve - 2 * L.b * Math.sqrt(ka), 0), kp * sve + 2 * L.b * Math.sqrt(kp), uh];
+    const sve = Math.max(sv - uh, 0), { ka, kp, k0 } = kCoef(L), aw = 1 + c.adh;
+    return [k0 * sve, Math.max(ka * sve - 2 * L.b * Math.sqrt(ka * aw), 0), kp * sve + 2 * L.b * Math.sqrt(kp * aw), uh];
   }
-  const su = suAt(L, z), pa = Math.max(sv - 2 * su, 0), pp = sv + 2 * su;
+  const su = suAt(L, z), cf = 2 * su * Math.sqrt(1 + c.adh), pa = Math.max(sv - cf, 0), pp = sv + cf;
   let p0 = 0.5 * Math.max(sv - uh, 0) + Math.min(uh, sv);
   p0 = Math.min(Math.max(p0, pa), pp);
   return [p0, pa, pp, 0];
@@ -330,7 +345,7 @@ function analyze(c0) {
   const z = Array.from({ length: n }, (_, i) => i * DZ);
   const zs = z.map(v => Math.min(v + 1e-6, D - 1e-6));
   const trib = z.map((_, i) => (i === 0 || i === n - 1) ? DZ / 2 : DZ);
-  const EI = 4700 * Math.sqrt(c.wfc) * 1000 * Math.pow(c.wthick, 3) / 12 * c.wred;
+  const EI = c.wei > 0 ? c.wei : 4700 * Math.sqrt(c.wfc) * 1000 * Math.pow(c.wthick, 3) / 12 * c.wred;
   const kh = zs.map(v => layerAt(c, v).kh);
   const L = DZ, f = EI / (L * L * L);
   const ke = [[12, 6 * L, -12, 6 * L], [6 * L, 4 * L * L, -6 * L, 2 * L * L], [-12, -6 * L, 12, -6 * L], [6 * L, 2 * L * L, -6 * L, 4 * L * L]]
@@ -338,16 +353,15 @@ function analyze(c0) {
   const Kb = new Float64Array(N * N);
   for (let e = 0; e < n - 1; e++)
     for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) Kb[(2 * e + a) * N + 2 * e + b] += ke[a][b];
-  const out = zs.map(v => sideP(c, v, 0, c.gwl, c.surcharge));
   const Es = 2.05e8;
   const struts = c.struts.map(s => ({
     node: Math.min(n - 1, Math.round(s.z / DZ)), z: s.z, area: s.area / 1e4, spacing: s.spacing,
     k: Es * (s.area / 1e4) * c.seff / ((c.width / 2) * s.spacing), P: s.preload / s.spacing, d0: null
   }));
 
-  function solve(exc, preK) {
-    const wl = Math.max(c.gwl, exc + c.dewater);
-    const ins = zs.map(v => sideP(c, v, exc, wl, 0));
+  function solve(exc, preK, wlIn, wlOut) {
+    const ins = zs.map(v => sideP(c, v, exc, wlIn, 0));
+    const out = zs.map(v => sideP(c, v, 0, wlOut, c.surcharge));
     const hasIn = zs.map(v => v >= exc);
     let d = new Float64Array(n), u = null, done = false;
     for (let it = 0; it < 500 && !done; it++) {
@@ -389,16 +403,24 @@ function analyze(c0) {
       if (e === n - 2) { V[e + 1] = -fe[2]; M[e + 1] = fe[3]; }
     }
     const forces = struts.map((s, k) => s.d0 !== null ? s.P + s.k * (d[s.node] - s.d0) : (preK === k ? s.P : null));
-    return { exc, d: Array.from(d), M, V, po, pi, forces, ins };
+    return { exc, d: Array.from(d), M, V, po, pi, forces, ins, out, wlIn, wlOut };
   }
 
   const results = [];
   c.stages.forEach((st, i) => {
-    const r = solve(st.exc, -1);
+    const isNum = v => typeof v === "number" && isFinite(v);
+    const wlOut = isNum(st.wlout) ? st.wlout : c.gwl;
+    const wlIn = isNum(st.wlin) ? st.wlin : Math.max(wlOut, st.exc + c.dewater);
+    if (wlIn < st.exc) throw new Error("第 " + (i + 1) + " 階的壁內水位（GL-" + wlIn + " m）高於開挖面，請降到開挖面以下。");
+    if (wlIn < wlOut) throw new Error("第 " + (i + 1) + " 階的壁內水位高於壁外水位，請檢查輸入。");
+    const r = solve(st.exc, -1, wlIn, wlOut);
     r.label = "第" + (i + 1) + "階 GL-" + st.exc.toFixed(1) + " m";
-    results.push(r);
     const s = struts[st.install];
-    if (s && s.d0 === null) { const rp = solve(st.exc, st.install); s.d0 = rp.d[s.node]; }
+    if (s && s.d0 === null) {
+      const rp = solve(st.exc, st.install, wlIn, wlOut); s.d0 = rp.d[s.node];
+      if (c.mode !== "pre") { rp.label = r.label; rp.pre = r; results.push(rp); return; }
+    }
+    results.push(r);
   });
 
   /* ---- 穩定性 ---- */
@@ -408,7 +430,7 @@ function analyze(c0) {
   let Md = 0, Mr = 0;
   for (let j = 0; j < n; j++) {
     const arm = zs[j] - zsLast;
-    if (arm > 0) Md += (out[j][1] + out[j][3]) * arm * trib[j];
+    if (arm > 0) Md += (fin.out[j][1] + fin.out[j][3]) * arm * trib[j];
     if (zs[j] >= H) Mr += (fin.ins[j][2] + fin.ins[j][3]) * arm * trib[j];
   }
   stab.push({ name: "貫入深度（彎矩平衡）", fs: Mr / Md, req: 1.5, note: "對最下層支撐取矩，抵抗 " + Mr.toFixed(0) + "、驅動 " + Md.toFixed(0) + " kN·m/m",
@@ -429,14 +451,14 @@ function analyze(c0) {
     stab.push({ name: "底面隆起（Terzaghi 法）", fs: 5.7 * sm / sv, req: 1.5, note: "破壞深度內平均 su " + sm.toFixed(0) + " kPa，γH+q = " + sv.toFixed(0) + " kPa",
       desc: "開挖面下 " + B1.toFixed(1) + " m 範圍內平均 su = " + sm.toFixed(1) + " kPa；開挖面高程之總覆土壓 γH + q = " + sv.toFixed(1) + " kPa（保守不計滑動面側向剪力阻抗）。",
       calc: "FS = 5.7·su / (γH + q) = 5.7 × " + sm.toFixed(1) + " / " + sv.toFixed(1) + " = " + (5.7 * sm / sv).toFixed(2) });
-    if (Lb !== c.layers[c.layers.length - 1] && Lb.bot > c.gwl) {
-      const W = totalStress(c, H, Lb.bot), U = GW * (Lb.bot - c.gwl);
+    if (Lb !== c.layers[c.layers.length - 1] && Lb.bot > fin.wlOut) {
+      const W = totalStress(c, H, Lb.bot), U = GW * (Lb.bot - fin.wlOut);
       stab.push({ name: "上舉（黏土層下受壓水層）", fs: W / U, req: 1.2, note: "GL-" + Lb.bot.toFixed(1) + " m 處土重 " + W.toFixed(0) + "、水壓 " + U.toFixed(0) + " kPa",
-        desc: "黏土層底（GL-" + Lb.bot.toFixed(1) + " m）以下為透水層，假設其水壓為壁外靜水壓。開挖面至黏土層底之土重 Σγh = " + W.toFixed(1) + " kPa；水壓 u = 9.81 × (" + Lb.bot.toFixed(1) + " − " + c.gwl.toFixed(1) + ") = " + U.toFixed(1) + " kPa。",
+        desc: "黏土層底（GL-" + Lb.bot.toFixed(1) + " m）以下為透水層，假設其水壓為最終階段壁外水位之靜水壓。開挖面至黏土層底之土重 Σγh = " + W.toFixed(1) + " kPa；水壓 u = 9.81 × (" + Lb.bot.toFixed(1) + " − " + fin.wlOut.toFixed(1) + ") = " + U.toFixed(1) + " kPa。",
         calc: "FS = Σγh / u = " + W.toFixed(1) + " / " + U.toFixed(1) + " = " + (W / U).toFixed(2) });
     }
   } else {
-    const dh = H + c.dewater - c.gwl;
+    const dh = fin.wlIn - fin.wlOut;
     if (dh > 0) {
       const ie = dh / (dh + 2 * (D - H)), icr = (Lb.gamma - GW) / GW;
       stab.push({ name: "砂湧（臨界水力坡降）", fs: icr / ie, req: 1.5, note: "臨界坡降 " + icr.toFixed(2) + "，出口坡降約 " + ie.toFixed(2),
@@ -455,10 +477,10 @@ function analyze(c0) {
     const fmax = Math.max(...fs), Nn = fmax * s.spacing;
     return { k, z: s.z, fmax, N: Nn, sig: Nn / s.area / 1000, Fa: Fa / 1000 };
   });
-  return { c, z, D, EI, results, stab, strutRows, struts, out, kh, Es, lam, Cc, Fa: Fa / 1000 };
+  return { c, z, D, EI, results, stab, strutRows, struts, kh, Es, lam, Cc, Fa: Fa / 1000 };
 }
 
-if (typeof module !== "undefined") module.exports = { analyze, defaultCase };
+if (typeof module !== "undefined") module.exports = { analyze, defaultCase, kCoef };
 
 /* ================================ 介面 ================================ */
 if (typeof document !== "undefined") (function () {
@@ -467,24 +489,27 @@ if (typeof document !== "undefined") (function () {
   try { const s = localStorage.getItem("excavation-case"); if (s) { const o = JSON.parse(s); if (o && o.layers && o.stages) C = o; } } catch (e) {}
   const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
   if (!C.meta) C.meta = { project: "", no: "", by: "", check: "", date: today() };
-  const scalars = ["surcharge", "gwl", "dewater", "width", "wdepth", "wthick", "wfc", "wred", "seff", "sfy", "skl", "sr"];
+  const scalars = ["surcharge", "gwl", "dewater", "width", "adh", "wei", "wdepth", "wthick", "wfc", "wred", "seff", "sfy", "skl", "sr"];
+  if (!(C.adh >= 0)) C.adh = 0.5;
   const num = v => { const x = parseFloat(v); return isFinite(x) ? x : NaN; };
   const esc = s => String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
 
   function buildInputs() {
-    scalars.forEach(k => { $(k).value = C[k]; });
-    $("tLayers").innerHTML = "<tr><th>名稱</th><th>層底 (m)</th><th>γ (kN/m³)</th><th>類型</th><th>φ° ／ su</th><th>c ／ Δsu</th><th>kh (kN/m³)</th><th></th></tr>" +
+    $("mode").value = C.mode === "pre" ? "pre" : "post";
+    scalars.forEach(k => { $(k).value = (typeof C[k] === "number" && isFinite(C[k])) ? C[k] : ""; });
+    $("tLayers").innerHTML = "<tr><th>名稱</th><th>層底 (m)</th><th>SPT-N</th><th>γ (kN/m³)</th><th>類型</th><th>φ° ／ su</th><th>c ／ Δsu</th><th>δ°</th><th>kh (kN/m³)</th><th>由 N</th><th></th></tr>" +
       C.layers.map((L, i) => `<tr><td class="nm"><input id="L${i}name" data-t="layers" data-i="${i}" data-k="name" value="${esc(L.name)}" aria-label="土層名稱"></td>` +
-        ["bot", "gamma"].map(k => `<td><input type="number" step="any" id="L${i}${k}" data-t="layers" data-i="${i}" data-k="${k}" value="${L[k]}"></td>`).join("") +
+        ["bot", "n", "gamma"].map(k => `<td><input type="number" step="any" id="L${i}${k}" data-t="layers" data-i="${i}" data-k="${k}" value="${L[k] == null || isNaN(L[k]) ? "" : L[k]}"></td>`).join("") +
         `<td><select id="L${i}type" data-t="layers" data-i="${i}" data-k="type"><option value="S"${L.type === "S" ? " selected" : ""}>砂性</option><option value="C"${L.type === "C" ? " selected" : ""}>黏性</option></select></td>` +
-        ["a", "b", "kh"].map(k => `<td><input type="number" step="any" id="L${i}${k}" data-t="layers" data-i="${i}" data-k="${k}" value="${L[k]}"></td>`).join("") +
-        `<td><button class="x" type="button" data-del="layers" data-i="${i}" aria-label="刪除土層">×</button></td></tr>`).join("");
+        ["a", "b", "d", "kh"].map(k => `<td><input type="number" step="any" id="L${i}${k}" data-t="layers" data-i="${i}" data-k="${k}" ${k === "d" ? (L.type === "S" ? 'placeholder="φ/2"' : 'disabled placeholder="–"') : ""} value="${k === "d" ? (L.type === "S" && typeof L.d === "number" && isFinite(L.d) ? L.d : "") : L[k]}"></td>`).join("") +
+        `<td><button type="button" data-est="${i}" title="依 SPT-N 值推估 φ 或 su，以及 kh" style="white-space:nowrap;font-size:12.5px;padding:4px 6px">估算</button></td><td><button class="x" type="button" data-del="layers" data-i="${i}" aria-label="刪除土層">×</button></td></tr>`).join("");
     $("tStruts").innerHTML = "<tr><th>層</th><th>深度 GL- (m)</th><th>斷面積 (cm²)</th><th>水平間距 (m)</th><th>預壓 (kN/支)</th><th></th></tr>" +
       C.struts.map((s, i) => `<tr><td>${i + 1}</td>` +
         ["z", "area", "spacing", "preload"].map(k => `<td><input type="number" step="any" id="S${i}${k}" data-t="struts" data-i="${i}" data-k="${k}" value="${s[k]}"></td>`).join("") +
         `<td><button class="x" type="button" data-del="struts" data-i="${i}" aria-label="刪除支撐">×</button></td></tr>`).join("");
-    $("tStages").innerHTML = "<tr><th>階段</th><th>開挖至 GL- (m)</th><th>開挖後架設</th><th></th></tr>" +
+    $("tStages").innerHTML = "<tr><th>階段</th><th>開挖至 GL- (m)</th><th>壁內水位 GL- (m)</th><th>壁外水位 GL- (m)</th><th>開挖後架設</th><th></th></tr>" +
       C.stages.map((s, i) => `<tr><td>${i + 1}</td><td><input type="number" step="any" id="G${i}exc" data-t="stages" data-i="${i}" data-k="exc" value="${s.exc}"></td>` +
+        ["wlin", "wlout"].map(k => `<td><input type="number" step="any" id="G${i}${k}" data-t="stages" data-i="${i}" data-k="${k}" placeholder="自動" value="${typeof s[k] === "number" && isFinite(s[k]) ? s[k] : ""}"></td>`).join("") +
         `<td><select id="G${i}install" data-t="stages" data-i="${i}" data-k="install"><option value="-1">不架設</option>` +
         C.struts.map((_, k) => `<option value="${k}"${s.install === k ? " selected" : ""}>支撐 ${k + 1}</option>`).join("") + `</select></td>` +
         `<td><button class="x" type="button" data-del="stages" data-i="${i}" aria-label="刪除階段">×</button></td></tr>`).join("");
@@ -495,15 +520,26 @@ if (typeof document !== "undefined") (function () {
     if (t.dataset.t) {
       const o = C[t.dataset.t][+t.dataset.i], k = t.dataset.k;
       o[k] = (k === "name" || k === "type") ? t.value : (k === "install" ? parseInt(t.value, 10) : num(t.value));
+      if (t.dataset.t === "layers" && ["a", "b", "d", "kh", "type"].includes(k)) o.est = false;
+      if (t.dataset.t === "layers" && k === "type") buildInputs();
     } else if (scalars.includes(t.id)) C[t.id] = num(t.value);
+    else if (t.id === "mode") C.mode = t.value;
     schedule();
   });
   $("inputs").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
-    if (b.dataset.del) {
+    $("estMsg").hidden = true;
+    if (b.dataset.est) {
+      const L = C.layers[+b.dataset.est], N = L.n;
+      if (!(N > 0)) { $("estMsg").hidden = false; $("estMsg").textContent = "請先在「" + L.name + "」填入大於 0 的 SPT-N 值。"; return; }
+      if (L.type === "S") { L.a = +Math.min(45, Math.sqrt(15 * N) + 15).toFixed(1); L.b = 0; L.d = +(L.a / 2).toFixed(1); }
+      else { L.a = +(6.25 * N).toFixed(1); L.b = 0; }
+      L.kh = Math.round(6779 * Math.pow(N, 0.406));
+      L.est = true;
+    } else if (b.dataset.del) {
       const i = +b.dataset.i; C[b.dataset.del].splice(i, 1);
       if (b.dataset.del === "struts") C.stages.forEach(s => { if (s.install === i) s.install = -1; else if (s.install > i) s.install--; });
-    } else if (b.id === "addLayer") { const l = C.layers[C.layers.length - 1]; C.layers.push({ name: "新土層", bot: (l ? l.bot : 0) + 5, gamma: 19, type: "S", a: 32, b: 0, kh: 20000 }); }
+    } else if (b.id === "addLayer") { const l = C.layers[C.layers.length - 1]; C.layers.push({ name: "新土層", bot: (l ? l.bot : 0) + 5, n: 15, gamma: 19, type: "S", a: 32, b: 0, d: 16, kh: 20000 }); }
     else if (b.id === "addStrut") { const l = C.struts[C.struts.length - 1]; C.struts.push({ z: (l ? l.z : -2) + 3, area: 173.9, spacing: 5, preload: 500 }); }
     else if (b.id === "addStage") { const l = C.stages[C.stages.length - 1]; C.stages.push({ exc: (l ? l.exc : 0) + 3, install: -1 }); }
     else return;
@@ -544,8 +580,8 @@ if (typeof document !== "undefined") (function () {
 
     $("tStab").innerHTML = "<tr><th>項目</th><th>安全係數</th><th>需求</th><th>判定</th><th style='text-align:left'>說明</th></tr>" +
       R.stab.map(s => `<tr><td>${esc(s.name)}</td><td>${s.fs.toFixed(2)}</td><td>≥ ${s.req.toFixed(1)}</td><td class="t">${pill(s.fs >= s.req)}</td><td class="note">${esc(s.note)}</td></tr>`).join("");
-    $("tStage").innerHTML = "<tr><th>階段</th><th>最大變位 (mm)</th><th>最大彎矩 (kN·m/m)</th><th>最大剪力 (kN/m)</th>" + R.struts.map((_, k) => `<th>支撐 ${k + 1} (kN/m)</th>`).join("") + "</tr>" +
-      rs.map((r, i) => `<tr><td>${esc(r.label)}</td><td>${dPk[i].toFixed(1)}</td><td>${mPk[i].toFixed(0)}</td><td>${amax(r.V).toFixed(0)}</td>` +
+    $("tStage").innerHTML = "<tr><th>階段</th><th>水位 內／外 (m)</th><th>架撐前變位 (mm)</th><th>最大變位 (mm)</th><th>最大彎矩 (kN·m/m)</th><th>最大剪力 (kN/m)</th>" + R.struts.map((_, k) => `<th>支撐 ${k + 1} (kN/m)</th>`).join("") + "</tr>" +
+      rs.map((r, i) => `<tr><td>${esc(r.label)}</td><td>${r.wlIn.toFixed(1)}／${r.wlOut.toFixed(1)}</td><td>${r.pre ? (amax(r.pre.d) * 1000).toFixed(1) : "–"}</td><td>${dPk[i].toFixed(1)}</td><td>${mPk[i].toFixed(0)}</td><td>${amax(r.V).toFixed(0)}</td>` +
         r.forces.map(f => `<td>${f === null ? "–" : f.toFixed(0)}</td>`).join("") + "</tr>").join("");
     $("tStrutChk").innerHTML = "<tr><th>支撐</th><th>深度 GL- (m)</th><th>最大軸力 (kN/m)</th><th>每支軸力 (kN)</th><th>應力 (MPa)</th><th>容許 (MPa)</th><th>判定</th></tr>" +
       R.strutRows.map(s => s.unused ? `<tr><td>支撐 ${s.k + 1}</td><td>${s.z}</td><td colspan="5" class="note">未在任何階段架設</td></tr>` :
@@ -579,7 +615,7 @@ if (typeof document !== "undefined") (function () {
       s += `<rect x="${G.sx}" y="${a}" width="${G.sw}" height="${b - a}" fill="var(--${L.type === "S" ? "sand" : "clay"})" stroke="var(--line)"/>`;
       if (b - a > 26) s += `<text x="${G.sx + 6}" y="${a + 15}" style="fill:var(--ink)">${esc(L.name)}</text><text x="${G.sx + 6}" y="${a + 29}" class="num">${L.type === "S" ? "φ " + L.a + "°" : "su " + L.a + "+" + L.b + "z"}</text>`;
     });
-    if (c.gwl < D) { const gy = y(c.gwl); s += `<path d="M${G.sx + G.sw + 4} ${gy - 8}l10 0l-5 8z" fill="var(--in)"/><line x1="${G.sx + G.sw}" x2="${G.sx + G.sw + 18}" y1="${gy}" y2="${gy}" stroke="var(--in)" stroke-width="1.5"/>`; }
+    if (cur.wlOut < D) { const gy = y(cur.wlOut); s += `<path d="M${G.sx + G.sw + 4} ${gy - 8}l10 0l-5 8z" fill="var(--in)"/><line x1="${G.sx + G.sw}" x2="${G.sx + G.sw + 18}" y1="${gy}" y2="${gy}" stroke="var(--in)" stroke-width="1.5"/>`; }
     ticks(0, D, 8).filter(v => v <= D + 1e-6).forEach(v => { s += `<text x="${G.sx - 6}" y="${y(v) + 4}" text-anchor="end" class="num">${v}</text>`; });
     s += `<text x="12" y="${(y0 + y1) / 2}" transform="rotate(-90 12 ${(y0 + y1) / 2})" text-anchor="middle">深度 GL- (m)</text>`;
     // 四個圖
@@ -675,41 +711,44 @@ if (typeof document !== "undefined") (function () {
 
     h += `<h2>一、設計條件</h2><table>` +
       `<tr><td class="k">最終開挖深度 H</td><td class="l">${f(fin.exc, 2)} m</td><td class="k">開挖寬度 B</td><td class="l">${f(c.width, 2)} m</td></tr>` +
-      `<tr><td class="k">地表超載 q</td><td class="l">${f(c.surcharge, 1)} kPa</td><td class="k">壁外地下水位</td><td class="l">GL-${f(c.gwl, 2)} m</td></tr>` +
-      `<tr><td class="k">擋土壁</td><td class="l">厚 ${f(c.wthick * 100, 0)} cm，深 ${f(D, 2)} m，f′c = ${f(c.wfc, 0)} MPa</td><td class="k">壁內水位</td><td class="l">各階段開挖面下 ${f(c.dewater, 2)} m</td></tr>` +
+      `<tr><td class="k">地表超載 q</td><td class="l">${f(c.surcharge, 1)} kPa</td><td class="k">初始地下水位</td><td class="l">GL-${f(c.gwl, 2)} m</td></tr>` +
+      `<tr><td class="k">擋土壁</td><td class="l">${c.wei > 0 ? "深 " + f(D, 2) + " m，EI = " + f(R.EI, 0) + " kN·m²/m" : "厚 " + f(c.wthick * 100, 0) + " cm，深 " + f(D, 2) + " m，f′c = " + f(c.wfc, 0) + " MPa"}</td><td class="k">最終階段水位</td><td class="l">壁內 GL-${f(fin.wlIn, 2)} m，壁外 GL-${f(fin.wlOut, 2)} m</td></tr>` +
       `<tr><td class="k">支撐</td><td class="l">${R.struts.filter(s => s.d0 !== null).length} 層水平支撐</td><td class="k">貫入深度</td><td class="l">${f(D - fin.exc, 2)} m</td></tr></table>`;
 
-    h += `<h2>二、土層參數</h2>` + tbl(["土層", "深度 GL- (m)", "γ<br>(kN/m³)", "類型", "φ (°)", "c (kPa)", "su (kPa)", "Ka", "Kp", "K₀", "kh<br>(kN/m³)"],
+    h += `<h2>二、土層參數</h2>` + tbl(["土層", "深度 GL- (m)", "SPT-N", "γ<br>(kN/m³)", "類型", "φ (°)", "δ (°)", "c (kPa)", "su (kPa)", "Ka", "Kp", "K₀", "kh<br>(kN/m³)"],
       c.layers.map(L => {
-        const S = L.type === "S", ph = L.a * Math.PI / 180, ka = S ? Math.tan(Math.PI / 4 - ph / 2) ** 2 : 1;
-        return [td(esc(L.name), "l"), td(f(L.top, 1) + " ～ " + f(L.bot, 1), "c"), td(f(L.gamma, 1)), td(S ? "砂性" : "黏性", "c"),
-          td(S ? f(L.a, 0) : "0"), td(S ? f(L.b, 0) : "–"), td(S ? "–" : f(L.a, 0) + (L.b ? " + " + f(L.b, 1) + "·Δz" : "")),
-          td(f(ka, 3)), td(f(1 / ka, 3)), td(S ? f(1 - Math.sin(ph), 3) : "0.5"), td(f(L.kh, 0))];
-      })) + `<p class="note">砂性土採排水有效應力分析並另計靜水壓；黏性土採不排水總應力分析（φ = 0），su 隨層內深度 Δz 線性增加，K₀ 為有效應力之靜止土壓係數。</p>`;
+        const S = L.type === "S", kc = kCoef(L);
+        return [td(esc(L.name), "l"), td(f(L.top, 1) + " ～ " + f(L.bot, 1), "c"), td(L.n > 0 ? String(+f(L.n, 1)) : "–"), td(f(L.gamma, 1)), td(S ? "砂性" : "黏性", "c"),
+          td(S ? String(+f(L.a, 1)) : "0"), td(S ? String(+f(kc.d, 1)) : "–"), td(S ? String(+f(L.b, 1)) : "–"), td(S ? "–" : f(L.a, 0) + (L.b ? " + " + f(L.b, 1) + "·Δz" : "")),
+          td(f(kc.ka, 3)), td(f(kc.kp, 3)), td(f(kc.k0, 3)), td(f(L.kh, 0))];
+      })) + `<p class="note">砂性土採排水有效應力分析並另計靜水壓；黏性土採不排水總應力分析（φ = 0），su 隨層內深度 Δz 線性增加，K₀ 為有效應力之靜止土壓係數。${c.layers.some(L => L.est) ? "<br>下列土層之強度與 kh 由 SPT-N 值以經驗式推估：" + c.layers.filter(L => L.est).map(L => esc(L.name)).join("、") + "。kh = 691·N^0.406 (t/m³)；砂性土 φ = √(15N) + 15（≤ 45°）、δ = φ/2；黏性土 su = 6.25N (kPa)。" : ""}</p>`;
 
     h += `<h2>三、分析方法</h2>
       <p>採彈塑性基礎梁法。擋土壁以梁元素模擬（節點間距 ${DZ} m），壁體兩側土壤以彈塑性彈簧模擬，依施工順序逐階分析開挖、架設支撐與預壓。位移 δ 以朝開挖側為正。</p>
       <p class="eq">壁外側壓：p = p₀ − kh·δ　　壁內側壓：p = p₀ + kh·δ　　且 pa ≤ p ≤ pp</p>
-      <p class="eq">砂性土：Ka = tan²(45° − φ/2)，Kp = tan²(45° + φ/2)，K₀ = 1 − sin φ</p>
-      <p class="eq">　　　　pa = Ka·σv′ − 2c√Ka ≥ 0，pp = Kp·σv′ + 2c√Kp，另加靜水壓 u = γw·hw</p>
-      <p class="eq">黏性土：pa = σv − 2su ≥ 0，pp = σv + 2su（總應力）</p>
+      <p class="eq">砂性土（Coulomb 土壓之水平分量，δ 為壁面摩擦角）：</p>
+      <p class="eq">　　　　Ka = cos²φ / [1 + √(sin(φ+δ)·sin φ / cos δ)]²，Kp = cos²φ / [1 − √(sin(φ+δ)·sin φ / cos δ)]²，K₀ = 1 − sin φ</p>
+      <p class="eq">　　　　pa = Ka·σv′ − 2c√[Ka(1 + cw/c)] ≥ 0，pp = Kp·σv′ + 2c√[Kp(1 + cw/c)]，另加靜水壓 u = γw·hw</p>
+      <p class="eq">黏性土：pa = σv − 2su√(1 + cw/su) ≥ 0，pp = σv + 2su√(1 + cw/su)（總應力）</p>
+      <p class="eq">壁面附著力比 cw/c = ${f(c.adh, 2)}</p>
       <p class="eq">支撐軸力：N = P + k·(δ − δ₀)，δ₀ 為預壓完成時支撐位置之壁體變位</p>`;
 
     h += `<h2>四、構件參數</h2><h3>4.1 擋土壁</h3>
-      <p class="eq">E = 4700√f′c = 4700 × √${f(c.wfc, 0)} = ${f(E, 0)} MPa</p>
+      ${c.wei > 0 ? `<p class="eq">EI = ${f(R.EI, 0)} kN·m²/m　（直接輸入之每公尺壁寬勁度，已含折減）</p>` : `<p class="eq">E = 4700√f′c = 4700 × √${f(c.wfc, 0)} = ${f(E, 0)} MPa</p>
       <p class="eq">I = t³/12 = ${f(c.wthick, 2)}³ / 12 = ${I.toExponential(3)} m⁴/m</p>
-      <p class="eq">EI = ${f(c.wred, 2)} × E × I = ${f(R.EI, 0)} kN·m²/m　（開裂折減係數 ${f(c.wred, 2)}）</p>
+      <p class="eq">EI = ${f(c.wred, 2)} × E × I = ${f(R.EI, 0)} kN·m²/m　（開裂折減係數 ${f(c.wred, 2)}）</p>`}
       <h3>4.2 支撐</h3>
       <p class="eq">k = η·Es·A / (L·s)，Es = 2.05×10⁵ MPa，L = B/2 = ${f(c.width / 2, 2)} m，η = ${f(c.seff, 2)}</p>` +
       tbl(["支撐", "深度 GL- (m)", "斷面積 A (cm²)", "水平間距 s (m)", "預壓 (kN/支)", "預壓 P (kN/m)", "勁度 k (kN/m/m)"],
         R.struts.map((s, k) => [td("第 " + (k + 1) + " 層", "c"), td(f(s.z, 2)), td(f(s.area * 1e4, 1)), td(f(s.spacing, 2)), td(f(s.P * s.spacing, 0)), td(f(s.P, 1)), td(f(s.k, 0))]));
 
-    h += `<h2>五、施工階段</h2>` + tbl(["階段", "開挖至 GL- (m)", "開挖後施作"],
-      c.stages.map((st, i) => [td("第 " + (i + 1) + " 階", "c"), td(f(st.exc, 2)), td(R.struts[st.install] ? "架設第 " + (st.install + 1) + " 層支撐（GL-" + f(R.struts[st.install].z, 2) + " m）並預壓" : "—", "l")]));
+    h += `<h2>五、施工階段</h2>` + tbl(["階段", "開挖至 GL- (m)", "壁內水位 GL- (m)", "壁外水位 GL- (m)", "開挖後施作"],
+      c.stages.map((st, i) => [td("第 " + (i + 1) + " 階", "c"), td(f(st.exc, 2)), td(f(rs[i].wlIn, 2)), td(f(rs[i].wlOut, 2)), td(R.struts[st.install] ? "架設第 " + (st.install + 1) + " 層支撐（GL-" + f(R.struts[st.install].z, 2) + " m）並預壓" : "—", "l")])) +
+      `<p class="note">各階段水位隨開挖降水調整，壁內、壁外水壓均以該階段水位之靜水壓計算，不計滲流。</p>`;
 
     const rows6 = [];
     for (let zz = 0; zz <= D + 1e-9; zz += 1) {
-      const j = Math.min(R.z.length - 1, Math.round(zz / DZ)), o = R.out[j], n = fin.ins[j], zq = Math.min(zz + 1e-6, D - 1e-6);
+      const j = Math.min(R.z.length - 1, Math.round(zz / DZ)), o = fin.out[j], n = fin.ins[j], zq = Math.min(zz + 1e-6, D - 1e-6);
       let L = c.layers[c.layers.length - 1]; for (const q of c.layers) if (zq >= q.top && zq < q.bot) { L = q; break; }
       const inside = zq >= fin.exc;
       rows6.push([td(f(R.z[j], 1)), td(esc(L.name), "l"), td(f(o[1], 1)), td(f(o[0], 1)), td(f(o[3], 1)), td(inside ? f(n[2], 1) : "–"), td(inside ? f(n[3], 1) : "–"), td(f(fin.po[j], 1)), td(inside ? f(fin.pi[j], 1) : "–")]);
@@ -719,8 +758,9 @@ if (typeof document !== "undefined") (function () {
       `<p class="note">單位 kPa。土層界面處取界面下方之值；分析結果為彈簧平衡後之側壓（含水壓）。</p>`;
 
     h += `<h2>七、分析結果</h2>` +
-      tbl(["階段", "最大變位<br>(mm)", "最大彎矩<br>(kN·m/m)", "最大剪力<br>(kN/m)"].concat(R.struts.map((_, k) => "支撐 " + (k + 1) + "<br>(kN/m)")),
-        rs.map(r => [td(esc(r.label), "l"), td(f(amax(r.d) * 1000, 1)), td(f(amax(r.M), 0)), td(f(amax(r.V), 0))].concat(r.forces.map(v => td(v === null ? "–" : f(v, 0)))))) +
+      `<p>${c.mode === "pre" ? "各階段結果為該階開挖完成、尚未架設支撐時之狀態。" : "各階段結果為該階開挖完成並架設支撐、施加預壓後之狀態；「架撐前變位」為開挖完成但尚未架撐時之最大壁體變位。"}</p>` +
+      tbl(["階段", "架撐前變位<br>(mm)", "最大變位<br>(mm)", "最大彎矩<br>(kN·m/m)", "最大剪力<br>(kN/m)"].concat(R.struts.map((_, k) => "支撐 " + (k + 1) + "<br>(kN/m)")),
+        rs.map(r => [td(esc(r.label), "l"), td(r.pre ? f(amax(r.pre.d) * 1000, 1) : "–"), td(f(amax(r.d) * 1000, 1)), td(f(amax(r.M), 0)), td(f(amax(r.V), 0))].concat(r.forces.map(v => td(v === null ? "–" : f(v, 0)))))) +
       `<figure>${chartSVG(last, true).s}<div class="lg">${rs.map((r, i) => `<span><i style="background:${stageColor(i)}"></i>${esc(r.label)}</span>`).join("")}<span><i style="background:var(--strut)"></i>支撐</span><span><i style="background:var(--out)"></i>壁外側壓</span><span><i style="background:var(--in)"></i>壁內側壓</span></div>` +
       `<figcaption>圖 1　各階段壁體變位、彎矩、剪力，及最終階段側壓分布（圓點為最終階段最大值位置）</figcaption></figure>`;
 
@@ -742,7 +782,7 @@ if (typeof document !== "undefined") (function () {
       ${sr.length ? `<li>支撐最大軸力 ${f(Math.max(...sr.map(s => s.N)), 0)} kN/支，應力比最大 ${f(Math.max(...sr.map(s => s.sig / s.Fa)), 2)}，${sr.every(s => s.sig <= s.Fa) ? "符合" : "不符合"}容許應力。</li>` : ""}
       <li>穩定性：${R.stab.map(s => esc(s.name) + " FS = " + f(s.fs, 2) + "（" + (s.fs >= s.req ? "OK" : "NG") + "）").join("；")}。</li>
       <li>綜合判定：${allOk ? '<span class="ok">各項檢核均符合需求</span>' : '<span class="ng">有檢核項目不符需求，應調整設計</span>'}。</li></ul>
-      <p class="note">附註：本計算以 Rankine 土壓理論及彈塑性彈簧模型進行，未考慮滲流、壁面摩擦、土壤塑性遲滯、支撐溫度效應及鄰近結構物超載分布；安全係數需求值應依現行規範與主管機關規定核對。本計算書供初步評估參考，正式設計應由專業技師依實際地質調查資料辦理並簽證。</p>
+      <p class="note">附註：本計算以 Coulomb 土壓理論及彈塑性彈簧模型進行，未考慮滲流、土壤塑性遲滯、支撐溫度效應及鄰近結構物超載分布；安全係數需求值應依現行規範與主管機關規定核對。本計算書供初步評估參考，正式設計應由專業技師依實際地質調查資料辦理並簽證。</p>
       <div class="sign"><div>計算者</div><div>覆核者</div><div>日期</div></div>`;
     return h;
   }
