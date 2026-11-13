@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>開挖支撐分析</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* 版面：左欄輸入（土層/支撐/階段表格），右欄結果（摘要→圖→表）。工程計算書的調性：細線、等寬數字、鋼藍主色。 */
+:root{
+  --bg:#f1f3f2; --surface:#ffffff; --ink:#1a1f24; --muted:#5d6770; --line:#dce0de; --field:#f7f8f7;
+  --accent:#1c5cab; --ramp-a:#9ec5f4; --ramp-b:#0d366b; --strut:#d95926;
+  --out:#eb6834; --in:#256abf; --sand:#f3ead2; --clay:#dfe5e8;
+  --ok:#006300; --ok-bg:#e1f1e1; --ng:#b3261e; --ng-bg:#fbe4e2;
+  --font:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;
+  --num:"Barlow Semi Condensed","Noto Sans TC",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#13161a; --surface:#1b1f24; --ink:#e8ebee; --muted:#9aa4ad; --line:#2d333a; --field:#22272d;
+    --accent:#6da7ec; --ramp-a:#256abf; --ramp-b:#cde2fb; --strut:#eb6834;
+    --out:#eb6834; --in:#5598e7; --sand:#3a3424; --clay:#2a3238;
+    --ok:#6fd08a; --ok-bg:#173221; --ng:#ff8a80; --ng-bg:#3d1c1a;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#13161a; --surface:#1b1f24; --ink:#e8ebee; --muted:#9aa4ad; --line:#2d333a; --field:#22272d;
+  --accent:#6da7ec; --ramp-a:#256abf; --ramp-b:#cde2fb; --strut:#eb6834;
+  --out:#eb6834; --in:#5598e7; --sand:#3a3424; --clay:#2a3238;
+  --ok:#6fd08a; --ok-bg:#173221; --ng:#ff8a80; --ng-bg:#3d1c1a;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.55}
+.wrap{max-width:1560px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
+h1{font-size:22px;margin:0;font-weight:700;letter-spacing:.02em}
+header p{margin:0;color:var(--muted);font-size:13px}
+.grid{display:grid;grid-template-columns:minmax(0,540px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:1100px){.grid{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
+.card h2{font-size:14px;margin:0 0 10px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2 small{font-weight:400;color:var(--muted);font-size:12px}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px 12px}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+input,select{font:inherit;font-family:var(--num);font-size:14px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:4px;padding:5px 7px;width:100%;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th{font-size:11.5px;font-weight:500;color:var(--muted);text-align:left;padding:3px 4px;white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:3px 4px;vertical-align:middle}
+table.in td input,table.in td select{padding:4px 5px}
+table.in td.nm input{font-family:var(--font);min-width:92px}
+table.in td input[type=number]{min-width:54px}
+table.in td select{min-width:72px}
+table.in td input[data-k=kh]{min-width:78px}
+table.out th,table.out td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+table.out th:first-child,table.out td:first-child{text-align:left}
+table.out td{font-family:var(--num);font-size:14.5px}
+table.out td:first-child,table.out td.t{font-family:var(--font);font-size:13.5px}
+table.out td.note{font-family:var(--font);font-size:12px;color:var(--muted);text-align:left;white-space:normal}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:4px;padding:4px 10px}
+button:hover{border-color:var(--accent)}
+button.x{padding:2px 7px;color:var(--muted)}
+button.add{font-size:12.5px;margin-top:8px}
+.hint{font-size:12px;color:var(--muted);margin:8px 0 0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;border-top:3px solid var(--accent)}
+.tile .k{font-size:12px;color:var(--muted)}
+.tile .v{font-family:var(--num);font-size:30px;font-weight:600;line-height:1.15}
+.tile .v span{font-size:14px;font-weight:500;color:var(--muted);margin-left:4px}
+.tile .s{font-size:12px;color:var(--muted)}
+.tile.ok{border-top-color:var(--ok)} .tile.ng{border-top-color:var(--ng)}
+.pill{display:inline-block;font-family:var(--font);font-size:12px;font-weight:700;padding:1px 9px;border-radius:99px}
+.pill.ok{color:var(--ok);background:var(--ok-bg)} .pill.ng{color:var(--ng);background:var(--ng-bg)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;padding:4px 10px;border-radius:99px}
+.chip i{width:18px;height:3px;border-radius:2px;display:block}
+.chip[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);font-weight:700}
+.readout{font-family:var(--num);font-size:14px;color:var(--ink);min-height:24px;margin:10px 0 4px;display:flex;flex-wrap:wrap;gap:4px 18px}
+.readout b{font-weight:600}.readout em{font-style:normal;color:var(--muted);font-family:var(--font);font-size:12px;margin-right:4px}
+svg{display:block;font-family:var(--font)}
+svg text{fill:var(--muted);font-size:11.5px}
+svg .tt{fill:var(--ink);font-size:13px;font-weight:700}
+svg .num{font-family:var(--num);font-size:12px}
+.err{border-color:var(--ng);color:var(--ng);background:var(--ng-bg)}
+.foot{color:var(--muted);font-size:12px;max-width:90ch}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line)}
+.tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:8px 16px;font-size:14.5px;color:var(--muted)}
+.tabs button[aria-selected=true]{color:var(--ink);font-weight:700;border-bottom-color:var(--accent)}
+.rbar{display:flex;flex-direction:column;gap:12px}
+.rbar .fields{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.rbar input{font-family:var(--font)}
+.rbar .act{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:700;padding:7px 16px}
+#reportView{display:flex;flex-direction:column;gap:16px}
+[hidden]{display:none!important}
+@media print{header,.tabs,#analysisView,.rbar{display:none!important}.wrap{padding:0;max-width:none}#reportView{display:block!important}body{background:#fff}}
+</style>
+<style id="rcss">
+.paper{--bg:#fff;--surface:#fff;--ink:#111;--muted:#555;--line:#cfd3d1;--accent:#1c5cab;--ramp-a:#9ec5f4;--ramp-b:#0d366b;--strut:#d95926;--out:#eb6834;--in:#256abf;--sand:#f3ead2;--clay:#dfe5e8;
+  color-scheme:light;background:#fff;color:#111;width:210mm;max-width:210mm;margin:0 auto;padding:16mm 15mm;box-shadow:0 1px 6px rgba(0,0,0,.18);box-sizing:border-box;
+  font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;font-size:10.5pt;line-height:1.6}
+.paper h1{font-size:18pt;text-align:center;margin:0 0 5mm;letter-spacing:.25em;font-weight:700}
+.paper h2{font-size:12pt;margin:7mm 0 2mm;border-bottom:1.5px solid #111;padding-bottom:1mm;break-after:avoid;display:block;font-weight:700}
+.paper h3{font-size:10.5pt;margin:4mm 0 1mm;break-after:avoid}
+.paper p{margin:1mm 0}
+.paper table{border-collapse:collapse;width:100%;margin:2mm 0;font-variant-numeric:tabular-nums}
+.paper tr{break-inside:avoid}
+.paper th,.paper td{border:1px solid #888;padding:1.1mm 1.8mm;font-size:9.5pt;text-align:right;white-space:normal;color:#111;font-family:inherit}
+.paper th{background:#eef0ef;font-weight:700;text-align:center}
+.paper td.l{text-align:left}.paper td.c{text-align:center}
+.paper td.k{background:#eef0ef;width:20%;text-align:center;font-weight:700}
+.paper .eq{font-family:"Cambria Math","Times New Roman","Noto Sans TC",serif;margin:1mm 0 1mm 6mm;font-size:10.5pt}
+.paper .ok{color:#006300;font-weight:700}.paper .ng{color:#b3261e;font-weight:700}
+.paper svg{display:block;width:100%;height:auto}
+.paper svg text{fill:#444;font-size:13.5px}.paper svg .tt{fill:#111;font-size:15px;font-weight:700}
+.paper figure{margin:3mm 0;break-inside:avoid}
+.paper figcaption{font-size:9pt;color:#555;text-align:center;margin-top:1mm}
+.paper .lg{display:flex;flex-wrap:wrap;gap:1mm 5mm;font-size:9pt;justify-content:center}
+.paper .lg i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:4px}
+.paper .sign{display:flex;gap:10mm;margin-top:14mm;break-inside:avoid}
+.paper .sign div{flex:1;border-top:1px solid #111;padding-top:1mm;text-align:center;font-size:9.5pt}
+.paper .note{font-size:9pt;color:#555}
+.paper ul{margin:1mm 0;padding-left:6mm}
+@page{size:A4;margin:14mm}
+@media print{.paper{box-shadow:none;margin:0;padding:0;width:auto;max-width:none}.noprint{display:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>開挖支撐分析</h1>
+    <p>彈塑性基礎梁法・分階段開挖・每公尺壁寬（kN、m、kPa）</p>
+  </header>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" id="tabA" aria-selected="true">分析</button>
+    <button type="button" role="tab" id="tabR" aria-selected="false">計算書</button>
+  </nav>
+  <div class="grid" id="analysisView">
+    <div class="col" id="inputs">
+      <section class="card">
+        <h2>基本條件</h2>
+        <div class="fields">
+          <label class="f">地表超載 q (kPa)<input type="number" id="surcharge" step="1"></label>
+          <label class="f">壁外地下水位 GL- (m)<input type="number" id="gwl" step="0.5"></label>
+          <label class="f">壁內降水至開挖面下 (m)<input type="number" id="dewater" step="0.5"></label>
+          <label class="f">開挖寬度 B (m)<input type="number" id="width" step="1"></label>
+        </div>
+      </section>
+      <section class="card">
+        <h2>擋土壁</h2>
+        <div class="fields">
+          <label class="f">壁體深度 (m)<input type="number" id="wdepth" step="0.5"></label>
+          <label class="f">壁厚 (m)<input type="number" id="wthick" step="0.1"></label>
+          <label class="f">混凝土 f′c (MPa)<input type="number" id="wfc" step="1"></label>
+          <label class="f">EI 折減係數<input type="number" id="wred" step="0.05"></label>
+        </div>
+      </section>
+      <section class="card">
+        <h2>土層 <small>砂性＝排水有效應力，黏性＝不排水總應力</small></h2>
+        <div class="scroll"><table class="in" id="tLayers"></table></div>
+        <button class="add" id="addLayer" type="button">＋ 新增土層</button>
+        <p class="hint">砂性土填 φ 與 c；黏性土填層頂 su 與每公尺增量 Δsu。kh 為水平地盤反力係數。</p>
+      </section>
+      <section class="card">
+        <h2>支撐</h2>
+        <div class="scroll"><table class="in" id="tStruts"></table></div>
+        <button class="add" id="addStrut" type="button">＋ 新增支撐</button>
+        <div class="fields" style="margin-top:12px">
+          <label class="f">勁度折減<input type="number" id="seff" step="0.05"></label>
+          <label class="f">鋼材 Fy (MPa)<input type="number" id="sfy" step="5"></label>
+          <label class="f">無支撐長 KL (m)<input type="number" id="skl" step="0.5"></label>
+          <label class="f">迴轉半徑 r (cm)<input type="number" id="sr" step="0.1"></label>
+        </div>
+      </section>
+      <section class="card">
+        <h2>施工階段 <small>每階段先開挖，再架設指定支撐並預壓</small></h2>
+        <div class="scroll"><table class="in" id="tStages"></table></div>
+        <button class="add" id="addStage" type="button">＋ 新增階段</button>
+      </section>
+    </div>
+    <div class="col" id="results">
+      <div class="card err" id="error" hidden></div>
+      <div class="tiles" id="tiles"></div>
+      <section class="card">
+        <h2>各階段壁體反應 <small>點選階段可切換圖上的強調與側壓分布</small></h2>
+        <div class="chips" id="chips"></div>
+        <div class="readout" id="readout"></div>
+        <div class="scroll"><div id="chart" style="min-width:860px"></div></div>
+      </section>
+      <section class="card">
+        <h2>穩定性檢核 <small>最終開挖階段</small></h2>
+        <div class="scroll"><table class="out" id="tStab"></table></div>
+      </section>
+      <section class="card">
+        <h2>各階段結果 <button id="copyCsv" type="button">複製沿深度數值（CSV）</button></h2>
+        <div class="scroll"><table class="out" id="tStage"></table></div>
+      </section>
+      <section class="card">
+        <h2>支撐檢核 <small>簡化容許應力法，僅計軸壓</small></h2>
+        <div class="scroll"><table class="out" id="tStrutChk"></table></div>
+      </section>
+      <p class="foot">模型簡化：壁兩側土壤以彈簧模擬，上下限為 Rankine 主動與被動土壓；不考慮滲流、壁面摩擦、土壤塑性遲滯、支撐溫度效應與鄰房超載分布。安全係數需求值為常用值，請自行對照現行規範。本工具供學習與初步評估，正式設計須由專業技師依實際鑽探資料辦理。</p>
+    </div>
+  </div>
+  <div id="reportView" hidden>
+    <section class="card rbar">
+      <div class="fields">
+        <label class="f">工程名稱<input id="mProject" data-m="project"></label>
+        <label class="f">案號<input id="mNo" data-m="no"></label>
+        <label class="f">計算者<input id="mBy" data-m="by"></label>
+        <label class="f">覆核者<input id="mCheck" data-m="check"></label>
+        <label class="f">計算日期<input id="mDate" data-m="date"></label>
+      </div>
+      <div class="act">
+        <button type="button" class="primary" id="dlReport">列印／另存 PDF</button>
+        <span class="hint" id="dlHint" style="margin:0">計算書內容會跟著「分析」頁的輸入即時更新。</span>
+      </div>
+    </section>
+    <div class="scroll"><div class="paper" id="paper"></div></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================ 計算核心（不碰 DOM） ============================ */
+const GW = 9.81, DZ = 0.25;
+
+function defaultCase() {
+  return {
+    surcharge: 10, gwl: 2, dewater: 0.5, width: 20,
+    wdepth: 20, wthick: 0.6, wfc: 28, wred: 0.7,
+    layers: [
+      { name: "SF 回填層",   bot: 2,  gamma: 18,   type: "S", a: 28, b: 0, kh: 8000 },
+      { name: "SM 粉土質砂", bot: 8,  gamma: 19,   type: "S", a: 30, b: 0, kh: 15000 },
+      { name: "CL 粉質黏土", bot: 25, gamma: 18.5, type: "C", a: 60, b: 4, kh: 15000 },
+      { name: "SM 緊密砂層", bot: 40, gamma: 20,   type: "S", a: 34, b: 0, kh: 40000 }
+    ],
+    struts: [
+      { z: 1, area: 173.9, spacing: 5, preload: 300 },
+      { z: 4, area: 173.9, spacing: 5, preload: 500 },
+      { z: 7, area: 173.9, spacing: 5, preload: 500 }
+    ],
+    seff: 0.7, sfy: 250, skl: 6, sr: 8.84,
+    stages: [ { exc: 1.5, install: 0 }, { exc: 4.5, install: 1 }, { exc: 7.5, install: 2 }, { exc: 10, install: -1 } ]
+  };
+}
+
+function prep(c) {
+  let top = 0;
+  for (const L of c.layers) {
+    if (!(L.bot > top)) throw new Error("土層「" + L.name + "」的層底深度必須大於上一層的層底。");
+    L.top = top; top = L.bot;
+    if (!(L.gamma > 0) || !(L.kh > 0)) throw new Error("土層「" + L.name + "」的單位重與 kh 必須大於 0。");
+  }
+  if (!c.layers.length) throw new Error("至少需要一層土層。");
+  if (!(c.wdepth > 0)) throw new Error("請輸入壁體深度。");
+  if (!c.stages.length) throw new Error("至少需要一個施工階段。");
+  let prev = 0;
+  c.stages.forEach((s, i) => {
+    if (!(s.exc > prev)) throw new Error("第 " + (i + 1) + " 階的開挖深度必須比前一階深。");
+    if (!(s.exc < c.wdepth)) throw new Error("第 " + (i + 1) + " 階的開挖深度必須小於壁體深度。");
+    prev = s.exc;
+    if (s.install >= 0 && c.struts[s.install] && !(c.struts[s.install].z < s.exc))
+      throw new Error("第 " + (i + 1) + " 階要架設的支撐 " + (s.install + 1) + " 必須位於該階開挖面以上。");
+  });
+  return c;
+}
+function layerAt(c, z) {
+  for (const L of c.layers) if (z >= L.top && z < L.bot) return L;
+  return c.layers[c.layers.length - 1];
+}
+function totalStress(c, z0, z) {
+  if (z <= z0) return 0;
+  let s = 0;
+  for (const L of c.layers) {
+    const a = Math.max(L.top, z0), b = Math.min(L.bot, z);
+    if (b > a) s += L.gamma * (b - a);
+  }
+  const last = c.layers[c.layers.length - 1];
+  if (z > last.bot) s += last.gamma * (z - Math.max(last.bot, z0));
+  return s;
+}
+const suAt = (L, z) => L.a + L.b * (z - L.top);
+/* 某一側在深度 z 的 [靜止 p0, 主動 pa, 被動 pp, 水壓 u]；黏土為總應力，u=0 */
+function sideP(c, z, surface, wl, q) {
+  if (z < surface) return [0, 0, 0, 0];
+  const L = layerAt(c, z), sv = q + totalStress(c, surface, z), uh = GW * Math.max(0, z - wl);
+  if (L.type === "S") {
+    const sve = Math.max(sv - uh, 0), ph = L.a * Math.PI / 180;
+    const ka = Math.tan(Math.PI / 4 - ph / 2) ** 2, kp = 1 / ka, k0 = 1 - Math.sin(ph);
+    return [k0 * sve, Math.max(ka * sve - 2 * L.b * Math.sqrt(ka), 0), kp * sve + 2 * L.b * Math.sqrt(kp), uh];
+  }
+  const su = suAt(L, z), pa = Math.max(sv - 2 * su, 0), pp = sv + 2 * su;
+  let p0 = 0.5 * Math.max(sv - uh, 0) + Math.min(uh, sv);
+  p0 = Math.min(Math.max(p0, pa), pp);
+  return [p0, pa, pp, 0];
+}
+/* 對稱帶狀矩陣求解（半帶寬 3），K 為 N×N 一維陣列，會被改寫 */
+function solveBand(K, F, N) {
+  for (let i = 0; i < N; i++) {
+    const piv = K[i * N + i];
+    if (!(Math.abs(piv) > 1e-9)) throw new Error("勁度矩陣奇異：壁體沒有足夠的土壤或支撐束制。");
+    const rm = Math.min(i + 3, N - 1);
+    for (let r = i + 1; r <= rm; r++) {
+      const f = K[r * N + i] / piv;
+      if (f === 0) continue;
+      for (let k = i; k <= rm; k++) K[r * N + k] -= f * K[i * N + k];
+      F[r] -= f * F[i];
+    }
+  }
+  const u = new Float64Array(N);
+  for (let i = N - 1; i >= 0; i--) {
+    let s = F[i];
+    const rm = Math.min(i + 3, N - 1);
+    for (let k = i + 1; k <= rm; k++) s -= K[i * N + k] * u[k];
+    u[i] = s / K[i * N + i];
+  }
+  return u;
+}
+
+function analyze(c0) {
+  const c = prep(c0);
+  const n = Math.round(c.wdepth / DZ) + 1, N = 2 * n, D = (n - 1) * DZ;
+  const z = Array.from({ length: n }, (_, i) => i * DZ);
+  const zs = z.map(v => Math.min(v + 1e-6, D - 1e-6));
+  const trib = z.map((_, i) => (i === 0 || i === n - 1) ? DZ / 2 : DZ);
+  const EI = 4700 * Math.sqrt(c.wfc) * 1000 * Math.pow(c.wthick, 3) / 12 * c.wred;
+  const kh = zs.map(v => layerAt(c, v).kh);
+  const L = DZ, f = EI / (L * L * L);
+  const ke = [[12, 6 * L, -12, 6 * L], [6 * L, 4 * L * L, -6 * L, 2 * L * L], [-12, -6 * L, 12, -6 * L], [6 * L, 2 * L * L, -6 * L, 4 * L * L]]
+    .map(r => r.map(v => v * f));
+  const Kb = new Float64Array(N * N);
+  for (let e = 0; e < n - 1; e++)
+    for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) Kb[(2 * e + a) * N + 2 * e + b] += ke[a][b];
+  const out = zs.map(v => sideP(c, v, 0, c.gwl, c.surcharge));
+  const Es = 2.05e8;
+  const struts = c.struts.map(s => ({
+    node: Math.min(n - 1, Math.round(s.z / DZ)), z: s.z, area: s.area / 1e4, spacing: s.spacing,
+    k: Es * (s.area / 1e4) * c.seff / ((c.width / 2) * s.spacing), P: s.preload / s.spacing, d0: null
+  }));
+
+  function solve(exc, preK) {
+    const wl = Math.max(c.gwl, exc + c.dewater);
+    const ins = zs.map(v => sideP(c, v, exc, wl, 0));
+    const hasIn = zs.map(v => v >= exc);
+    let d = new Float64Array(n), u = null, done = false;
+    for (let it = 0; it < 500 && !done; it++) {
+      const K = Kb.slice(), F = new Float64Array(N);
+      for (let j = 0; j < n; j++) {
+        const t = trib[j], [p0o, pao, ppo, uo] = out[j], [p0i, pai, ppi, ui] = ins[j];
+        const po = p0o - kh[j] * d[j];
+        if (po < pao) F[2 * j] += pao * t; else if (po > ppo) F[2 * j] += ppo * t;
+        else { K[2 * j * N + 2 * j] += kh[j] * t; F[2 * j] += p0o * t; }
+        F[2 * j] += uo * t;
+        if (hasIn[j]) {
+          const pi = p0i + kh[j] * d[j];
+          if (pi < pai) F[2 * j] -= pai * t; else if (pi > ppi) F[2 * j] -= ppi * t;
+          else { K[2 * j * N + 2 * j] += kh[j] * t; F[2 * j] -= p0i * t; }
+          F[2 * j] -= ui * t;
+        }
+      }
+      struts.forEach((s, k) => {
+        const j = 2 * s.node;
+        if (s.d0 !== null) { K[j * N + j] += s.k; F[j] += s.k * s.d0 - s.P; }
+        else if (preK === k) F[j] -= s.P;
+      });
+      u = solveBand(K, F, N);
+      let diff = 0;
+      const dn = new Float64Array(n);
+      for (let j = 0; j < n; j++) { dn[j] = u[2 * j]; diff = Math.max(diff, Math.abs(dn[j] - d[j])); }
+      if (diff < 1e-9) { d = dn; done = true; }
+      else if (it < 60) d = dn;
+      else for (let j = 0; j < n; j++) d[j] = 0.5 * (d[j] + dn[j]);
+    }
+    if (!done) throw new Error("迭代未收斂，請檢查輸入參數是否合理。");
+    const clip = (v, a, b) => Math.min(Math.max(v, a), b);
+    const po = out.map((o, j) => clip(o[0] - kh[j] * d[j], o[1], o[2]) + o[3]);
+    const pi = ins.map((o, j) => hasIn[j] ? clip(o[0] + kh[j] * d[j], o[1], o[2]) + o[3] : 0);
+    const M = new Array(n).fill(0), V = new Array(n).fill(0);
+    for (let e = 0; e < n - 1; e++) {
+      const fe = ke.map(r => r[0] * u[2 * e] + r[1] * u[2 * e + 1] + r[2] * u[2 * e + 2] + r[3] * u[2 * e + 3]);
+      V[e] = fe[0]; M[e] = -fe[1];
+      if (e === n - 2) { V[e + 1] = -fe[2]; M[e + 1] = fe[3]; }
+    }
+    const forces = struts.map((s, k) => s.d0 !== null ? s.P + s.k * (d[s.node] - s.d0) : (preK === k ? s.P : null));
+    return { exc, d: Array.from(d), M, V, po, pi, forces, ins };
+  }
+
+  const results = [];
+  c.stages.forEach((st, i) => {
+    const r = solve(st.exc, -1);
+    r.label = "第" + (i + 1) + "階 GL-" + st.exc.toFixed(1) + " m";
+    results.push(r);
+    const s = struts[st.install];
+    if (s && s.d0 === null) { const rp = solve(st.exc, st.install); s.d0 = rp.d[s.node]; }
+  });
+
+  /* ---- 穩定性 ---- */
+  const fin = results[results.length - 1], H = fin.exc, stab = [];
+  const used = struts.filter(s => s.d0 !== null);
+  const zsLast = used.length ? Math.max(...used.map(s => s.z)) : 0;
+  let Md = 0, Mr = 0;
+  for (let j = 0; j < n; j++) {
+    const arm = zs[j] - zsLast;
+    if (arm > 0) Md += (out[j][1] + out[j][3]) * arm * trib[j];
+    if (zs[j] >= H) Mr += (fin.ins[j][2] + fin.ins[j][3]) * arm * trib[j];
+  }
+  stab.push({ name: "貫入深度（彎矩平衡）", fs: Mr / Md, req: 1.5, note: "對最下層支撐取矩，抵抗 " + Mr.toFixed(0) + "、驅動 " + Md.toFixed(0) + " kN·m/m",
+    desc: "以最下層支撐（GL-" + zsLast.toFixed(1) + " m）為支點，比較開挖面以下壁內被動側壓（含水壓）之抵抗彎矩 Mr，與支點以下壁外主動側壓（含水壓）之驅動彎矩 Md。",
+    calc: "FS = Mr / Md = " + Mr.toFixed(0) + " / " + Md.toFixed(0) + " = " + (Mr / Md).toFixed(2) });
+  const Lb = layerAt(c, H + 1e-6), sv = c.surcharge + totalStress(c, 0, H);
+  if (Lb.type === "C") {
+    const X = D - zsLast, thEnd = Math.acos(Math.min(1, (H - zsLast) / X)), m = 400;
+    let integ = 0, mean = 0;
+    const suArc = t => { const zz = zsLast + X * Math.cos(t), LL = layerAt(c, zz); return LL.type === "C" ? suAt(LL, zz) : 0; };
+    for (let i = 0; i < m; i++) { const a = suArc(thEnd * i / m), b = suArc(thEnd * (i + 1) / m); integ += (a + b) / 2 * thEnd / m; }
+    mean = integ / thEnd;
+    stab.push({ name: "底面隆起（圓弧滑動法）", fs: X * X * integ / (sv * X * X / 2), req: 1.2, note: "半徑 " + X.toFixed(1) + " m，弧上平均 su " + mean.toFixed(0) + " kPa",
+      desc: "以最下層支撐為圓心、支撐以下壁長 X = " + D.toFixed(1) + " − " + zsLast.toFixed(1) + " = " + X.toFixed(1) + " m 為半徑之圓弧滑動面，弧角 θ = " + thEnd.toFixed(3) + " rad，弧上平均 su = " + mean.toFixed(1) + " kPa；W = (γH + q)·X = " + sv.toFixed(1) + " × " + X.toFixed(1) + " kN/m。",
+      calc: "FS = X·∫su·X dθ / (W·X/2) = " + (X * X * integ).toFixed(0) + " / " + (sv * X * X / 2).toFixed(0) + " = " + (X * X * integ / (sv * X * X / 2)).toFixed(2) });
+    const B1 = Math.min(c.width / Math.SQRT2, Lb.bot - H);
+    let sm = 0; for (let i = 0; i < 50; i++) sm += suAt(Lb, H + B1 * i / 49) / 50;
+    stab.push({ name: "底面隆起（Terzaghi 法）", fs: 5.7 * sm / sv, req: 1.5, note: "破壞深度內平均 su " + sm.toFixed(0) + " kPa，γH+q = " + sv.toFixed(0) + " kPa",
+      desc: "開挖面下 " + B1.toFixed(1) + " m 範圍內平均 su = " + sm.toFixed(1) + " kPa；開挖面高程之總覆土壓 γH + q = " + sv.toFixed(1) + " kPa（保守不計滑動面側向剪力阻抗）。",
+      calc: "FS = 5.7·su / (γH + q) = 5.7 × " + sm.toFixed(1) + " / " + sv.toFixed(1) + " = " + (5.7 * sm / sv).toFixed(2) });
+    if (Lb !== c.layers[c.layers.length - 1] && Lb.bot > c.gwl) {
+      const W = totalStress(c, H, Lb.bot), U = GW * (Lb.bot - c.gwl);
+      stab.push({ name: "上舉（黏土層下受壓水層）", fs: W / U, req: 1.2, note: "GL-" + Lb.bot.toFixed(1) + " m 處土重 " + W.toFixed(0) + "、水壓 " + U.toFixed(0) + " kPa",
+        desc: "黏土層底（GL-" + Lb.bot.toFixed(1) + " m）以下為透水層，假設其水壓為壁外靜水壓。開挖面至黏土層底之土重 Σγh = " + W.toFixed(1) + " kPa；水壓 u = 9.81 × (" + Lb.bot.toFixed(1) + " − " + c.gwl.toFixed(1) + ") = " + U.toFixed(1) + " kPa。",
+        calc: "FS = Σγh / u = " + W.toFixed(1) + " / " + U.toFixed(1) + " = " + (W / U).toFixed(2) });
+    }
+  } else {
+    const dh = H + c.dewater - c.gwl;
+    if (dh > 0) {
+      const ie = dh / (dh + 2 * (D - H)), icr = (Lb.gamma - GW) / GW;
+      stab.push({ name: "砂湧（臨界水力坡降）", fs: icr / ie, req: 1.5, note: "臨界坡降 " + icr.toFixed(2) + "，出口坡降約 " + ie.toFixed(2),
+        desc: "水頭差 Δh = " + dh.toFixed(2) + " m，貫入深度 Dp = " + (D - H).toFixed(2) + " m，滲流路徑取 Δh + 2Dp；臨界水力坡降 i_cr = (γ − γw)/γw = " + icr.toFixed(2) + "。",
+        calc: "FS = i_cr / i = " + icr.toFixed(2) + " / [" + dh.toFixed(2) + " / (" + dh.toFixed(2) + " + 2 × " + (D - H).toFixed(2) + ")] = " + (icr / ie).toFixed(2) });
+    }
+  }
+  /* ---- 支撐檢核 ---- */
+  const fy = c.sfy * 1000, lam = c.skl / (c.sr / 100), Cc = Math.sqrt(2 * Math.PI * Math.PI * Es / fy);
+  const Fa = lam <= Cc
+    ? (1 - lam * lam / (2 * Cc * Cc)) * fy / (5 / 3 + 3 * lam / (8 * Cc) - lam ** 3 / (8 * Cc ** 3))
+    : 12 * Math.PI * Math.PI * Es / (23 * lam * lam);
+  const strutRows = struts.map((s, k) => {
+    const fs = results.map(r => r.forces[k]).filter(v => v !== null);
+    if (!fs.length) return { k, z: s.z, unused: true };
+    const fmax = Math.max(...fs), Nn = fmax * s.spacing;
+    return { k, z: s.z, fmax, N: Nn, sig: Nn / s.area / 1000, Fa: Fa / 1000 };
+  });
+  return { c, z, D, EI, results, stab, strutRows, struts, out, kh, Es, lam, Cc, Fa: Fa / 1000 };
+}
+
+if (typeof module !== "undefined") module.exports = { analyze, defaultCase };
+
+/* ================================ 介面 ================================ */
+if (typeof document !== "undefined") (function () {
+  const $ = id => document.getElementById(id);
+  let C = defaultCase(), R = null, sel = 0;
+  try { const s = localStorage.getItem("excavation-case"); if (s) { const o = JSON.parse(s); if (o && o.layers && o.stages) C = o; } } catch (e) {}
+  const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  if (!C.meta) C.meta = { project: "", no: "", by: "", check: "", date: today() };
+  const scalars = ["surcharge", "gwl", "dewater", "width", "wdepth", "wthick", "wfc", "wred", "seff", "sfy", "skl", "sr"];
+  const num = v => { const x = parseFloat(v); return isFinite(x) ? x : NaN; };
+  const esc = s => String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+
+  function buildInputs() {
+    scalars.forEach(k => { $(k).value = C[k]; });
+    $("tLayers").innerHTML = "<tr><th>名稱</th><th>層底 (m)</th><th>γ (kN/m³)</th><th>類型</th><th>φ° ／ su</th><th>c ／ Δsu</th><th>kh (kN/m³)</th><th></th></tr>" +
+      C.layers.map((L, i) => `<tr><td class="nm"><input id="L${i}name" data-t="layers" data-i="${i}" data-k="name" value="${esc(L.name)}" aria-label="土層名稱"></td>` +
+        ["bot", "gamma"].map(k => `<td><input type="number" step="any" id="L${i}${k}" data-t="layers" data-i="${i}" data-k="${k}" value="${L[k]}"></td>`).join("") +
+        `<td><select id="L${i}type" data-t="layers" data-i="${i}" data-k="type"><option value="S"${L.type === "S" ? " selected" : ""}>砂性</option><option value="C"${L.type === "C" ? " selected" : ""}>黏性</option></select></td>` +
+        ["a", "b", "kh"].map(k => `<td><input type="number" step="any" id="L${i}${k}" data-t="layers" data-i="${i}" data-k="${k}" value="${L[k]}"></td>`).join("") +
+        `<td><button class="x" type="button" data-del="layers" data-i="${i}" aria-label="刪除土層">×</button></td></tr>`).join("");
+    $("tStruts").innerHTML = "<tr><th>層</th><th>深度 GL- (m)</th><th>斷面積 (cm²)</th><th>水平間距 (m)</th><th>預壓 (kN/支)</th><th></th></tr>" +
+      C.struts.map((s, i) => `<tr><td>${i + 1}</td>` +
+        ["z", "area", "spacing", "preload"].map(k => `<td><input type="number" step="any" id="S${i}${k}" data-t="struts" data-i="${i}" data-k="${k}" value="${s[k]}"></td>`).join("") +
+        `<td><button class="x" type="button" data-del="struts" data-i="${i}" aria-label="刪除支撐">×</button></td></tr>`).join("");
+    $("tStages").innerHTML = "<tr><th>階段</th><th>開挖至 GL- (m)</th><th>開挖後架設</th><th></th></tr>" +
+      C.stages.map((s, i) => `<tr><td>${i + 1}</td><td><input type="number" step="any" id="G${i}exc" data-t="stages" data-i="${i}" data-k="exc" value="${s.exc}"></td>` +
+        `<td><select id="G${i}install" data-t="stages" data-i="${i}" data-k="install"><option value="-1">不架設</option>` +
+        C.struts.map((_, k) => `<option value="${k}"${s.install === k ? " selected" : ""}>支撐 ${k + 1}</option>`).join("") + `</select></td>` +
+        `<td><button class="x" type="button" data-del="stages" data-i="${i}" aria-label="刪除階段">×</button></td></tr>`).join("");
+  }
+
+  $("inputs").addEventListener("input", e => {
+    const t = e.target;
+    if (t.dataset.t) {
+      const o = C[t.dataset.t][+t.dataset.i], k = t.dataset.k;
+      o[k] = (k === "name" || k === "type") ? t.value : (k === "install" ? parseInt(t.value, 10) : num(t.value));
+    } else if (scalars.includes(t.id)) C[t.id] = num(t.value);
+    schedule();
+  });
+  $("inputs").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.del) {
+      const i = +b.dataset.i; C[b.dataset.del].splice(i, 1);
+      if (b.dataset.del === "struts") C.stages.forEach(s => { if (s.install === i) s.install = -1; else if (s.install > i) s.install--; });
+    } else if (b.id === "addLayer") { const l = C.layers[C.layers.length - 1]; C.layers.push({ name: "新土層", bot: (l ? l.bot : 0) + 5, gamma: 19, type: "S", a: 32, b: 0, kh: 20000 }); }
+    else if (b.id === "addStrut") { const l = C.struts[C.struts.length - 1]; C.struts.push({ z: (l ? l.z : -2) + 3, area: 173.9, spacing: 5, preload: 500 }); }
+    else if (b.id === "addStage") { const l = C.stages[C.stages.length - 1]; C.stages.push({ exc: (l ? l.exc : 0) + 3, install: -1 }); }
+    else return;
+    buildInputs(); run();
+  });
+
+  let timer = null;
+  function schedule() { clearTimeout(timer); timer = setTimeout(run, 180); }
+  function run() {
+    try { localStorage.setItem("excavation-case", JSON.stringify(C)); } catch (e) {}
+    try {
+      R = analyze(JSON.parse(JSON.stringify(C)));
+      sel = R.results.length - 1;
+      $("error").hidden = true;
+      render();
+    } catch (err) {
+      $("error").hidden = false;
+      $("error").textContent = "無法計算：" + err.message;
+    }
+  }
+
+  const amax = a => a.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  const stageColor = i => { const n = R.results.length, t = n > 1 ? i / (n - 1) : 1; return `color-mix(in oklab, var(--ramp-b) ${(t * 100).toFixed(0)}%, var(--ramp-a))`; };
+  const pill = ok => `<span class="pill ${ok ? "ok" : "ng"}">${ok ? "✓ 符合" : "✗ 不足"}</span>`;
+
+  function render() {
+    const rs = R.results;
+    const dPk = rs.map(r => amax(r.d) * 1000), mPk = rs.map(r => amax(r.M));
+    const di = dPk.indexOf(Math.max(...dPk)), mi = mPk.indexOf(Math.max(...mPk));
+    const sr = R.strutRows.filter(s => !s.unused), sTop = sr.slice().sort((a, b) => b.N - a.N)[0];
+    const worst = R.stab.slice().sort((a, b) => a.fs / a.req - b.fs / b.req)[0];
+    const allOk = R.stab.every(s => s.fs >= s.req) && sr.every(s => s.sig <= s.Fa);
+    $("tiles").innerHTML =
+      `<div class="tile"><div class="k">最大壁體變位</div><div class="v">${dPk[di].toFixed(1)}<span>mm</span></div><div class="s">第 ${di + 1} 階</div></div>` +
+      `<div class="tile"><div class="k">最大彎矩</div><div class="v">${mPk[mi].toFixed(0)}<span>kN·m/m</span></div><div class="s">第 ${mi + 1} 階</div></div>` +
+      (sTop ? `<div class="tile"><div class="k">最大支撐軸力</div><div class="v">${sTop.N.toFixed(0)}<span>kN/支</span></div><div class="s">支撐 ${sTop.k + 1}（GL-${sTop.z} m）</div></div>` : "") +
+      `<div class="tile ${allOk ? "ok" : "ng"}"><div class="k">檢核結果</div><div class="v" style="font-family:var(--font);font-size:22px;line-height:1.6">${allOk ? "✓ 全數符合" : "✗ 有項目不足"}</div><div class="s">最緊：${esc(worst.name)} FS ${worst.fs.toFixed(2)}</div></div>`;
+
+    $("tStab").innerHTML = "<tr><th>項目</th><th>安全係數</th><th>需求</th><th>判定</th><th style='text-align:left'>說明</th></tr>" +
+      R.stab.map(s => `<tr><td>${esc(s.name)}</td><td>${s.fs.toFixed(2)}</td><td>≥ ${s.req.toFixed(1)}</td><td class="t">${pill(s.fs >= s.req)}</td><td class="note">${esc(s.note)}</td></tr>`).join("");
+    $("tStage").innerHTML = "<tr><th>階段</th><th>最大變位 (mm)</th><th>最大彎矩 (kN·m/m)</th><th>最大剪力 (kN/m)</th>" + R.struts.map((_, k) => `<th>支撐 ${k + 1} (kN/m)</th>`).join("") + "</tr>" +
+      rs.map((r, i) => `<tr><td>${esc(r.label)}</td><td>${dPk[i].toFixed(1)}</td><td>${mPk[i].toFixed(0)}</td><td>${amax(r.V).toFixed(0)}</td>` +
+        r.forces.map(f => `<td>${f === null ? "–" : f.toFixed(0)}</td>`).join("") + "</tr>").join("");
+    $("tStrutChk").innerHTML = "<tr><th>支撐</th><th>深度 GL- (m)</th><th>最大軸力 (kN/m)</th><th>每支軸力 (kN)</th><th>應力 (MPa)</th><th>容許 (MPa)</th><th>判定</th></tr>" +
+      R.strutRows.map(s => s.unused ? `<tr><td>支撐 ${s.k + 1}</td><td>${s.z}</td><td colspan="5" class="note">未在任何階段架設</td></tr>` :
+        `<tr><td>支撐 ${s.k + 1}</td><td>${s.z}</td><td>${s.fmax.toFixed(0)}</td><td>${s.N.toFixed(0)}</td><td>${s.sig.toFixed(0)}</td><td>${s.Fa.toFixed(0)}</td><td class="t">${pill(s.sig <= s.Fa)}</td></tr>`).join("");
+    drawChips(); drawChart(); readout(null); $("paper").innerHTML = buildReport();
+  }
+
+  function drawChips() {
+    $("chips").innerHTML = R.results.map((r, i) =>
+      `<button type="button" class="chip" data-s="${i}" aria-pressed="${i === sel}"><i style="background:${stageColor(i)}"></i>${esc(r.label)}</button>`).join("");
+  }
+  $("chips").addEventListener("click", e => { const b = e.target.closest("[data-s]"); if (!b) return; sel = +b.dataset.s; drawChips(); drawChart(); readout(null); });
+
+  function ticks(lo, hi, m) {
+    const span = hi - lo || 1, raw = span / m, p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(k => k * p).find(s => s >= raw);
+    const a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step, out = [];
+    for (let v = a; v <= b + step * 1e-6; v += step) out.push(Math.abs(v) < step * 1e-6 ? 0 : v);
+    return out;
+  }
+  const G = { W: 1110, H: 540, top: 44, bot: 26, sx: 44, sw: 92, px: 162, pw: 222, gap: 20 };
+  function chartSVG(si, stat) {
+    const rs = R.results, D = R.D, c = R.c, cur = rs[si];
+    const y = v => G.top + (G.H - G.top - G.bot) * v / D, y0 = y(0), y1 = y(D);
+    let s = `<svg viewBox="0 0 ${G.W} ${G.H}" role="img" aria-label="各階段壁體變位、彎矩、剪力與側壓沿深度分布">`;
+    // 土層柱狀圖
+    s += `<text x="${G.sx}" y="${G.top - 14}" class="tt">土層</text>`;
+    c.layers.forEach(L => {
+      if (L.top >= D) return;
+      const a = y(L.top), b = y(Math.min(L.bot, D));
+      s += `<rect x="${G.sx}" y="${a}" width="${G.sw}" height="${b - a}" fill="var(--${L.type === "S" ? "sand" : "clay"})" stroke="var(--line)"/>`;
+      if (b - a > 26) s += `<text x="${G.sx + 6}" y="${a + 15}" style="fill:var(--ink)">${esc(L.name)}</text><text x="${G.sx + 6}" y="${a + 29}" class="num">${L.type === "S" ? "φ " + L.a + "°" : "su " + L.a + "+" + L.b + "z"}</text>`;
+    });
+    if (c.gwl < D) { const gy = y(c.gwl); s += `<path d="M${G.sx + G.sw + 4} ${gy - 8}l10 0l-5 8z" fill="var(--in)"/><line x1="${G.sx + G.sw}" x2="${G.sx + G.sw + 18}" y1="${gy}" y2="${gy}" stroke="var(--in)" stroke-width="1.5"/>`; }
+    ticks(0, D, 8).filter(v => v <= D + 1e-6).forEach(v => { s += `<text x="${G.sx - 6}" y="${y(v) + 4}" text-anchor="end" class="num">${v}</text>`; });
+    s += `<text x="12" y="${(y0 + y1) / 2}" transform="rotate(-90 12 ${(y0 + y1) / 2})" text-anchor="middle">深度 GL- (m)</text>`;
+    // 四個圖
+    const panels = [
+      { t: "壁體變位 (mm)", key: "d", sc: 1000 }, { t: "彎矩 (kN·m/m)", key: "M", sc: 1 },
+      { t: "剪力 (kN/m)", key: "V", sc: 1 }, { t: "側壓 (kPa)", key: "p" }
+    ];
+    panels.forEach((p, pi) => {
+      const x0 = G.px + pi * (G.pw + G.gap), x1 = x0 + G.pw;
+      let lo = 0, hi = 0;
+      if (p.key === "p") { const m = Math.max(amax(cur.po), amax(cur.pi), 1); lo = -m; hi = m; }
+      else rs.forEach(r => r[p.key].forEach(v => { lo = Math.min(lo, v * p.sc); hi = Math.max(hi, v * p.sc); }));
+      if (hi - lo < 1e-9) hi = 1;
+      const tk = ticks(lo, hi, p.key === "p" ? 4 : 5); lo = tk[0]; hi = tk[tk.length - 1];
+      const x = v => x0 + (x1 - x0) * (v - lo) / (hi - lo);
+      p.x = x; p.x0 = x0;
+      s += `<text x="${x0}" y="${G.top - 14}" class="tt">${p.t}</text>`;
+      s += `<rect x="${x0}" y="${y0}" width="${G.pw}" height="${y1 - y0}" fill="none" stroke="var(--line)"/>`;
+      tk.forEach(v => { s += `<line x1="${x(v)}" x2="${x(v)}" y1="${y0}" y2="${y1}" stroke="var(--line)" stroke-width="${v === 0 ? 1.4 : 0.7}"/><text x="${x(v)}" y="${y1 + 16}" text-anchor="${v === lo ? "start" : v === hi ? "end" : "middle"}" class="num">${Math.abs(v) >= 1000 ? Math.round(p.key === "p" ? Math.abs(v) : v) : +(p.key === "p" ? Math.abs(v) : v).toFixed(2)}</text>`; });
+      c.layers.slice(1).forEach(L => { if (L.top < D) s += `<line x1="${x0}" x2="${x1}" y1="${y(L.top)}" y2="${y(L.top)}" stroke="var(--muted)" stroke-width=".6" stroke-dasharray="2 4"/>`; });
+      R.struts.forEach((st, k) => {
+        if (st.d0 === null || cur.forces[k] === null) return;
+        s += `<line x1="${x0}" x2="${x1}" y1="${y(st.z)}" y2="${y(st.z)}" stroke="var(--strut)" stroke-width="1.3"/>`;
+        if (pi === 0) s += `<text x="${x1 - 5}" y="${y(st.z) - 4}" text-anchor="end">支撐${k + 1}</text>`;
+      });
+      s += `<line x1="${x0}" x2="${x1}" y1="${y(cur.exc)}" y2="${y(cur.exc)}" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="6 4"/>`;
+      if (pi === 3) s += `<text x="${x1 - 5}" y="${y(cur.exc) - 5}" text-anchor="end" style="fill:var(--ink)">開挖面 GL-${cur.exc.toFixed(1)}</text>`;
+      if (p.key === "p") {
+        const line = (arr, sg) => arr.map((v, j) => `${j ? "L" : "M"}${x(sg * v).toFixed(1)} ${y(R.z[j]).toFixed(1)}`).join("");
+        s += `<path d="${line(cur.po, -1)}L${x(0)} ${y1}L${x(0)} ${y0}Z" fill="var(--out)" opacity=".2"/><path d="${line(cur.po, -1)}" fill="none" stroke="var(--out)" stroke-width="2"/>`;
+        s += `<path d="${line(cur.pi, 1)}L${x(0)} ${y1}L${x(0)} ${y0}Z" fill="var(--in)" opacity=".2"/><path d="${line(cur.pi, 1)}" fill="none" stroke="var(--in)" stroke-width="2"/>`;
+        s += `<text x="${x0 + 6}" y="${y0 + 15}" style="fill:var(--ink)">← 壁外</text><text x="${x1 - 6}" y="${y0 + 15}" text-anchor="end" style="fill:var(--ink)">壁內 →</text>`;
+      } else {
+        const order = rs.map((_, i) => i).filter(i => i !== si).concat([si]);
+        order.forEach(i => {
+          const d = rs[i][p.key].map((v, j) => `${j ? "L" : "M"}${x(v * p.sc).toFixed(1)} ${y(R.z[j]).toFixed(1)}`).join("");
+          s += `<path d="${d}" fill="none" stroke="${stageColor(i)}" stroke-width="${i === si ? 2.8 : 1.6}" stroke-linejoin="round" opacity="${i === si ? 1 : .8}"/>`;
+        });
+        const arr = cur[p.key]; let j = 0; arr.forEach((v, k) => { if (Math.abs(v) > Math.abs(arr[j])) j = k; });
+        s += `<circle cx="${x(arr[j] * p.sc)}" cy="${y(R.z[j])}" r="4.5" fill="${stageColor(si)}" stroke="var(--surface)" stroke-width="2"/>`;
+      }
+    });
+    if (stat) return { s: s + "</svg>" };
+    s += `<line id="hl" x1="${G.sx}" x2="${G.W - 4}" y1="0" y2="0" stroke="var(--ink)" stroke-width="1" opacity=".55" visibility="hidden"/>`;
+    s += `<g id="hd" visibility="hidden">${panels.map((_, i) => `<circle r="4" fill="var(--ink)" stroke="var(--surface)" stroke-width="1.5"/>`).join("")}<circle r="4" fill="var(--ink)" stroke="var(--surface)" stroke-width="1.5"/></g>`;
+    s += `<rect id="hit" x="${G.sx}" y="${y0}" width="${G.W - 4 - G.sx}" height="${y1 - y0}" fill="transparent"/></svg>`;
+    return { s, panels, y, y0, y1, cur, D };
+  }
+  function drawChart() {
+    const o = chartSVG(sel, false), { panels, y, y0, y1, cur, D } = o;
+    $("chart").innerHTML = o.s;
+    const svg = $("chart").firstChild, hit = svg.querySelector("#hit"), hl = svg.querySelector("#hl"), hd = svg.querySelector("#hd");
+    const move = e => {
+      const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+      const q = pt.matrixTransform(svg.getScreenCTM().inverse());
+      const j = Math.max(0, Math.min(R.z.length - 1, Math.round((q.y - y0) / (y1 - y0) * D / DZ)));
+      const yy = y(R.z[j]);
+      hl.setAttribute("y1", yy); hl.setAttribute("y2", yy); hl.setAttribute("visibility", "visible"); hd.setAttribute("visibility", "visible");
+      const xs = [panels[0].x(cur.d[j] * 1000), panels[1].x(cur.M[j]), panels[2].x(cur.V[j]), panels[3].x(-cur.po[j]), panels[3].x(cur.pi[j])];
+      Array.from(hd.children).forEach((cE, k) => { cE.setAttribute("cx", xs[k]); cE.setAttribute("cy", yy); });
+      readout(j);
+    };
+    hit.addEventListener("pointermove", move); hit.addEventListener("pointerdown", move);
+    hit.addEventListener("pointerleave", () => { hl.setAttribute("visibility", "hidden"); hd.setAttribute("visibility", "hidden"); readout(null); });
+  }
+  function readout(j) {
+    const r = R.results[sel];
+    if (j === null) { $("readout").innerHTML = `<span><em>滑過圖面可讀取任一深度的數值</em></span>`; return; }
+    $("readout").innerHTML = `<span><em>${esc(r.label)}</em><b>GL-${R.z[j].toFixed(2)} m</b></span>` +
+      `<span><em>變位</em><b>${(r.d[j] * 1000).toFixed(2)}</b> mm</span><span><em>彎矩</em><b>${r.M[j].toFixed(0)}</b> kN·m/m</span>` +
+      `<span><em>剪力</em><b>${r.V[j].toFixed(0)}</b> kN/m</span><span><em>壁外側壓</em><b>${r.po[j].toFixed(0)}</b> kPa</span><span><em>壁內側壓</em><b>${r.pi[j].toFixed(0)}</b> kPa</span>`;
+  }
+  $("copyCsv").addEventListener("click", () => {
+    if (!R) return;
+    const head = ["depth_m"].concat(...R.results.map((_, i) => [`S${i + 1}_disp_mm`, `S${i + 1}_M_kNm`, `S${i + 1}_V_kN`]));
+    const rows = R.z.map((zz, j) => [zz.toFixed(2)].concat(...R.results.map(r => [(r.d[j] * 1000).toFixed(2), r.M[j].toFixed(1), r.V[j].toFixed(1)])).join(","));
+    const txt = head.join(",") + "\n" + rows.join("\n"), b = $("copyCsv"), old = "複製沿深度數值（CSV）";
+    const done = ok => { b.textContent = ok ? "已複製" : "無法複製"; setTimeout(() => { b.textContent = old; }, 1600); };
+    try { navigator.clipboard.writeText(txt).then(() => done(true), () => done(false)); } catch (e) { done(false); }
+  });
+
+  /* ------------------------------ 計算書 ------------------------------ */
+  function buildReport() {
+    const c = R.c, rs = R.results, last = rs.length - 1, fin = rs[last], m = C.meta, D = R.D;
+    const f = (v, n) => Number(v).toFixed(n), okng = ok => ok ? '<span class="ok">OK</span>' : '<span class="ng">NG</span>';
+    const tbl = (head, rows) => "<table><tr>" + head.map(h => "<th>" + h + "</th>").join("") + "</tr>" + rows.map(r => "<tr>" + r.join("") + "</tr>").join("") + "</table>";
+    const td = (v, cls) => `<td${cls ? ' class="' + cls + '"' : ""}>${v}</td>`;
+    const E = 4700 * Math.sqrt(c.wfc), I = Math.pow(c.wthick, 3) / 12;
+    let h = `<h1>開挖支撐分析計算書</h1>`;
+    h += `<table><tr><td class="k">工程名稱</td><td class="l" colspan="3">${esc(m.project) || "&nbsp;"}</td></tr>` +
+      `<tr><td class="k">案號</td><td class="l">${esc(m.no)}</td><td class="k">計算日期</td><td class="l">${esc(m.date)}</td></tr>` +
+      `<tr><td class="k">計算者</td><td class="l">${esc(m.by)}</td><td class="k">覆核者</td><td class="l">${esc(m.check)}</td></tr></table>`;
+
+    h += `<h2>一、設計條件</h2><table>` +
+      `<tr><td class="k">最終開挖深度 H</td><td class="l">${f(fin.exc, 2)} m</td><td class="k">開挖寬度 B</td><td class="l">${f(c.width, 2)} m</td></tr>` +
+      `<tr><td class="k">地表超載 q</td><td class="l">${f(c.surcharge, 1)} kPa</td><td class="k">壁外地下水位</td><td class="l">GL-${f(c.gwl, 2)} m</td></tr>` +
+      `<tr><td class="k">擋土壁</td><td class="l">厚 ${f(c.wthick * 100, 0)} cm，深 ${f(D, 2)} m，f′c = ${f(c.wfc, 0)} MPa</td><td class="k">壁內水位</td><td class="l">各階段開挖面下 ${f(c.dewater, 2)} m</td></tr>` +
+      `<tr><td class="k">支撐</td><td class="l">${R.struts.filter(s => s.d0 !== null).length} 層水平支撐</td><td class="k">貫入深度</td><td class="l">${f(D - fin.exc, 2)} m</td></tr></table>`;
+
+    h += `<h2>二、土層參數</h2>` + tbl(["土層", "深度 GL- (m)", "γ<br>(kN/m³)", "類型", "φ (°)", "c (kPa)", "su (kPa)", "Ka", "Kp", "K₀", "kh<br>(kN/m³)"],
+      c.layers.map(L => {
+        const S = L.type === "S", ph = L.a * Math.PI / 180, ka = S ? Math.tan(Math.PI / 4 - ph / 2) ** 2 : 1;
+        return [td(esc(L.name), "l"), td(f(L.top, 1) + " ～ " + f(L.bot, 1), "c"), td(f(L.gamma, 1)), td(S ? "砂性" : "黏性", "c"),
+          td(S ? f(L.a, 0) : "0"), td(S ? f(L.b, 0) : "–"), td(S ? "–" : f(L.a, 0) + (L.b ? " + " + f(L.b, 1) + "·Δz" : "")),
+          td(f(ka, 3)), td(f(1 / ka, 3)), td(S ? f(1 - Math.sin(ph), 3) : "0.5"), td(f(L.kh, 0))];
+      })) + `<p class="note">砂性土採排水有效應力分析並另計靜水壓；黏性土採不排水總應力分析（φ = 0），su 隨層內深度 Δz 線性增加，K₀ 為有效應力之靜止土壓係數。</p>`;
+
+    h += `<h2>三、分析方法</h2>
+      <p>採彈塑性基礎梁法。擋土壁以梁元素模擬（節點間距 ${DZ} m），壁體兩側土壤以彈塑性彈簧模擬，依施工順序逐階分析開挖、架設支撐與預壓。位移 δ 以朝開挖側為正。</p>
+      <p class="eq">壁外側壓：p = p₀ − kh·δ　　壁內側壓：p = p₀ + kh·δ　　且 pa ≤ p ≤ pp</p>
+      <p class="eq">砂性土：Ka = tan²(45° − φ/2)，Kp = tan²(45° + φ/2)，K₀ = 1 − sin φ</p>
+      <p class="eq">　　　　pa = Ka·σv′ − 2c√Ka ≥ 0，pp = Kp·σv′ + 2c√Kp，另加靜水壓 u = γw·hw</p>
+      <p class="eq">黏性土：pa = σv − 2su ≥ 0，pp = σv + 2su（總應力）</p>
+      <p class="eq">支撐軸力：N = P + k·(δ − δ₀)，δ₀ 為預壓完成時支撐位置之壁體變位</p>`;
+
+    h += `<h2>四、構件參數</h2><h3>4.1 擋土壁</h3>
+      <p class="eq">E = 4700√f′c = 4700 × √${f(c.wfc, 0)} = ${f(E, 0)} MPa</p>
+      <p class="eq">I = t³/12 = ${f(c.wthick, 2)}³ / 12 = ${I.toExponential(3)} m⁴/m</p>
+      <p class="eq">EI = ${f(c.wred, 2)} × E × I = ${f(R.EI, 0)} kN·m²/m　（開裂折減係數 ${f(c.wred, 2)}）</p>
+      <h3>4.2 支撐</h3>
+      <p class="eq">k = η·Es·A / (L·s)，Es = 2.05×10⁵ MPa，L = B/2 = ${f(c.width / 2, 2)} m，η = ${f(c.seff, 2)}</p>` +
+      tbl(["支撐", "深度 GL- (m)", "斷面積 A (cm²)", "水平間距 s (m)", "預壓 (kN/支)", "預壓 P (kN/m)", "勁度 k (kN/m/m)"],
+        R.struts.map((s, k) => [td("第 " + (k + 1) + " 層", "c"), td(f(s.z, 2)), td(f(s.area * 1e4, 1)), td(f(s.spacing, 2)), td(f(s.P * s.spacing, 0)), td(f(s.P, 1)), td(f(s.k, 0))]));
+
+    h += `<h2>五、施工階段</h2>` + tbl(["階段", "開挖至 GL- (m)", "開挖後施作"],
+      c.stages.map((st, i) => [td("第 " + (i + 1) + " 階", "c"), td(f(st.exc, 2)), td(R.struts[st.install] ? "架設第 " + (st.install + 1) + " 層支撐（GL-" + f(R.struts[st.install].z, 2) + " m）並預壓" : "—", "l")]));
+
+    const rows6 = [];
+    for (let zz = 0; zz <= D + 1e-9; zz += 1) {
+      const j = Math.min(R.z.length - 1, Math.round(zz / DZ)), o = R.out[j], n = fin.ins[j], zq = Math.min(zz + 1e-6, D - 1e-6);
+      let L = c.layers[c.layers.length - 1]; for (const q of c.layers) if (zq >= q.top && zq < q.bot) { L = q; break; }
+      const inside = zq >= fin.exc;
+      rows6.push([td(f(R.z[j], 1)), td(esc(L.name), "l"), td(f(o[1], 1)), td(f(o[0], 1)), td(f(o[3], 1)), td(inside ? f(n[2], 1) : "–"), td(inside ? f(n[3], 1) : "–"), td(f(fin.po[j], 1)), td(inside ? f(fin.pi[j], 1) : "–")]);
+    }
+    h += `<h2>六、側向壓力（最終開挖階段）</h2>` +
+      tbl(["深度<br>GL- (m)", "土層", "壁外主動<br>pa", "壁外靜止<br>p₀", "壁外水壓<br>u", "壁內被動<br>pp", "壁內水壓<br>u", "分析結果<br>壁外合計", "分析結果<br>壁內合計"], rows6) +
+      `<p class="note">單位 kPa。土層界面處取界面下方之值；分析結果為彈簧平衡後之側壓（含水壓）。</p>`;
+
+    h += `<h2>七、分析結果</h2>` +
+      tbl(["階段", "最大變位<br>(mm)", "最大彎矩<br>(kN·m/m)", "最大剪力<br>(kN/m)"].concat(R.struts.map((_, k) => "支撐 " + (k + 1) + "<br>(kN/m)")),
+        rs.map(r => [td(esc(r.label), "l"), td(f(amax(r.d) * 1000, 1)), td(f(amax(r.M), 0)), td(f(amax(r.V), 0))].concat(r.forces.map(v => td(v === null ? "–" : f(v, 0)))))) +
+      `<figure>${chartSVG(last, true).s}<div class="lg">${rs.map((r, i) => `<span><i style="background:${stageColor(i)}"></i>${esc(r.label)}</span>`).join("")}<span><i style="background:var(--strut)"></i>支撐</span><span><i style="background:var(--out)"></i>壁外側壓</span><span><i style="background:var(--in)"></i>壁內側壓</span></div>` +
+      `<figcaption>圖 1　各階段壁體變位、彎矩、剪力，及最終階段側壓分布（圓點為最終階段最大值位置）</figcaption></figure>`;
+
+    const sr = R.strutRows.filter(s => !s.unused);
+    h += `<h2>八、支撐檢核</h2><p>以容許應力法檢核軸壓（未計自重彎矩與溫度效應）。Fy = ${f(c.sfy, 0)} MPa，KL = ${f(c.skl, 2)} m，r = ${f(c.sr, 2)} cm。</p>
+      <p class="eq">λ = KL / r = ${f(c.skl * 100, 0)} / ${f(c.sr, 2)} = ${f(R.lam, 1)}　　Cc = √(2π²Es / Fy) = ${f(R.Cc, 1)}</p>
+      <p class="eq">${R.lam <= R.Cc ? "λ ≤ Cc：Fa = [1 − λ²/(2Cc²)]·Fy / [5/3 + 3λ/(8Cc) − λ³/(8Cc³)]" : "λ > Cc：Fa = 12π²Es / (23λ²)"} = ${f(R.Fa, 1)} MPa</p>` +
+      tbl(["支撐", "深度 GL- (m)", "最大軸力 (kN/m)", "每支軸力 N (kN)", "fa = N/A (MPa)", "Fa (MPa)", "fa / Fa", "判定"],
+        sr.map(s => [td("第 " + (s.k + 1) + " 層", "c"), td(f(s.z, 2)), td(f(s.fmax, 1)), td(f(s.N, 0)), td(f(s.sig, 1)), td(f(s.Fa, 1)), td(f(s.sig / s.Fa, 2)), td(okng(s.sig <= s.Fa), "c")]));
+
+    h += `<h2>九、穩定性檢核</h2>` + R.stab.map((st, i) =>
+      `<h3>9.${i + 1} ${esc(st.name)}</h3><p>${esc(st.desc)}</p><p class="eq">${esc(st.calc)} ${st.fs >= st.req ? "≥" : "<"} ${f(st.req, 1)}　${okng(st.fs >= st.req)}</p>`).join("");
+
+    const dPk = rs.map(r => amax(r.d) * 1000), mPk = rs.map(r => amax(r.M)), vPk = rs.map(r => amax(r.V));
+    const allOk = R.stab.every(s => s.fs >= s.req) && sr.every(s => s.sig <= s.Fa);
+    h += `<h2>十、結論</h2><ul>
+      <li>壁體最大變位 ${f(Math.max(...dPk), 1)} mm（第 ${dPk.indexOf(Math.max(...dPk)) + 1} 階）。</li>
+      <li>壁體最大彎矩 ${f(Math.max(...mPk), 0)} kN·m/m、最大剪力 ${f(Math.max(...vPk), 0)} kN/m，供壁體配筋設計使用。</li>
+      ${sr.length ? `<li>支撐最大軸力 ${f(Math.max(...sr.map(s => s.N)), 0)} kN/支，應力比最大 ${f(Math.max(...sr.map(s => s.sig / s.Fa)), 2)}，${sr.every(s => s.sig <= s.Fa) ? "符合" : "不符合"}容許應力。</li>` : ""}
+      <li>穩定性：${R.stab.map(s => esc(s.name) + " FS = " + f(s.fs, 2) + "（" + (s.fs >= s.req ? "OK" : "NG") + "）").join("；")}。</li>
+      <li>綜合判定：${allOk ? '<span class="ok">各項檢核均符合需求</span>' : '<span class="ng">有檢核項目不符需求，應調整設計</span>'}。</li></ul>
+      <p class="note">附註：本計算以 Rankine 土壓理論及彈塑性彈簧模型進行，未考慮滲流、壁面摩擦、土壤塑性遲滯、支撐溫度效應及鄰近結構物超載分布；安全係數需求值應依現行規範與主管機關規定核對。本計算書供初步評估參考，正式設計應由專業技師依實際地質調查資料辦理並簽證。</p>
+      <div class="sign"><div>計算者</div><div>覆核者</div><div>日期</div></div>`;
+    return h;
+  }
+
+  ["project", "no", "by", "check", "date"].forEach(k => { const el = document.querySelector(`[data-m="${k}"]`); el.value = C.meta[k] || ""; });
+  $("reportView").addEventListener("input", e => {
+    const k = e.target.dataset.m; if (!k) return;
+    C.meta[k] = e.target.value;
+    try { localStorage.setItem("excavation-case", JSON.stringify(C)); } catch (err) {}
+    if (R) $("paper").innerHTML = buildReport();
+  });
+  function showView() {
+    const rep = location.hash === "#report";
+    $("analysisView").hidden = rep; $("reportView").hidden = !rep;
+    $("tabA").setAttribute("aria-selected", String(!rep)); $("tabR").setAttribute("aria-selected", String(rep));
+  }
+  $("tabA").addEventListener("click", () => { location.hash = "analysis"; showView(); });
+  $("tabR").addEventListener("click", () => { location.hash = "report"; showView(); });
+  window.addEventListener("hashchange", showView);
+
+  let dl = null;
+  if (window.claude && typeof window.claude.use === "function")
+    window.claude.use("downloads").then(ns => { if (!ns) return; dl = ns; $("dlReport").textContent = "下載計算書"; $("dlHint").textContent = "會存成一個 HTML 檔。用瀏覽器開啟後按「列印／存成 PDF」即可輸出 A4 計算書。"; }, () => {});
+  $("dlReport").addEventListener("click", async () => {
+    if (!R) return;
+    const hint = $("dlHint");
+    if (!dl) { try { window.print(); } catch (e) { hint.textContent = "這個檢視環境無法直接列印。"; } return; }
+    const title = "開挖支撐分析計算書" + (C.meta.project ? "－" + C.meta.project : "");
+    const html = `<!DOCTYPE html>\n<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>` +
+      `<style>body{margin:0;padding:16px 0;background:#e6e8e7}.bar{text-align:center;margin-bottom:12px}.bar button{font:inherit;font-size:15px;padding:8px 20px;cursor:pointer}${$("rcss").textContent}</style></head>` +
+      `<body><div class="bar noprint"><button onclick="window.print()">列印／存成 PDF</button></div><div class="paper">${$("paper").innerHTML}</div></body></html>`;
+    try { await dl.save({ filename: title.replace(/[\\/:*?"<>|]/g, "_") + ".html", data: html }); hint.textContent = "已下載。用瀏覽器開啟後按「列印／存成 PDF」。"; }
+    catch (err) { hint.textContent = err && err.code === "declined" ? "已取消下載。" : "無法下載：" + ((err && err.message) || "此環境不支援"); }
+  });
+
+  buildInputs(); run(); showView();
+})();
+</script>
+</body>
+</html>
